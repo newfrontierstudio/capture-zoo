@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <Product>CaptureZoo</Product><AssemblyTitle>CaptureZoo</AssemblyTitle><Version>1.0.0</Version><FileVersion>1.0.0.0</FileVersion><AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>capture.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 配布ツールのサンプル C# はアプリ本体へ含めない。 -->
+    <Compile Remove="tools\**\*.cs;artifacts\**\*.cs;tests\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="capture.ico" /></ItemGroup>
+</Project>
