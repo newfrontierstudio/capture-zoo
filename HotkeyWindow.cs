@@ -20,6 +20,7 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private int _id;
+    internal bool IsRegistered {get;private set;}
 
     public event Action? HotkeyPressed;
 
@@ -31,7 +32,8 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
         _id = id;
         CreateHandle(new CreateParams { Parent = (IntPtr)HWND_MESSAGE });
 
-        if (!RegisterHotKey(Handle, _id, modifiers, (uint)key))
+        IsRegistered=RegisterHotKey(Handle, _id, modifiers|0x4000, (uint)key);
+        if (!IsRegistered)
         {
             // よくある原因: 他のアプリがすでに同じキーを登録している。
             AppLog.Error(new InvalidOperationException(
@@ -47,6 +49,7 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
         if (!RegisterHotKey(Handle, nextId, 0x4000, (uint)key)) return false;
         UnregisterHotKey(Handle, _id);
         _id = nextId;
+        IsRegistered=true;
         return true;
     }
 

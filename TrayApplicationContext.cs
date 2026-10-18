@@ -19,6 +19,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly HotkeyWindow _hotkeyWindow;
     private readonly ToolStripMenuItem _autoStartItem;
     private bool _capturing;
+    private Form? _activeCaptureWindow;
     private Keys _captureKey = Keys.F10;
     private readonly ToolStripMenuItem _captureItem;
     private readonly ToolStripMenuItem _hotkeyMenu;
@@ -62,6 +63,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         menu.Items.Add(captureItem);
         menu.Items.Add(_hotkeyMenu);
+        menu.Items.Add("キャプチャを中止して待機に戻る", null, (_, _) => CancelCapture());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -84,12 +86,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _dispatcher.BeginInvoke((Action)RunCaptureFlow);
         };
 
-        AppLog.Info($"Tray daemon started. {_captureKey} registered as global hotkey.");
+        AppLog.Info($"Tray daemon started. {_captureKey} registration: {_hotkeyWindow.IsRegistered}.");
+        if(!_hotkeyWindow.IsRegistered)_trayIcon.ShowBalloonTip(5000,"CaptureZoo",$"{_captureKey}を登録できません。アイコンの右クリックで別のキーを選んでください。",ToolTipIcon.Warning);
     }
 
     private void ChangeHotkey(Keys key)
     {
-        if (key == _captureKey) return;
+        if (key == _captureKey && _hotkeyWindow.IsRegistered) return;
         if (!_hotkeyWindow.TryChangeKey(key))
         {
             MessageBox.Show($"{key} は他のアプリで使用されています。別のキーを選んでください。",
@@ -118,21 +121,30 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void RunCaptureFlow()
     {
-        if (_capturing) return; // 連打やダブルクリックでの多重起動を防ぐ
+        if (_capturing) { AppLog.Info("Capture already active; restoring its window."); PresentCaptureWindow(_activeCaptureWindow); return; }
         _capturing = true;
         AppLog.Info("Capture flow started.");
         try
         {
             using var desktop = DesktopSnapshot.Capture();
-            using var overlay = new CaptureOverlay(desktop);
-            var result = overlay.ShowDialog();
-            if (result != DialogResult.OK || overlay.SelectedImage is null) return;
-
-            using var selected = HdrDesktopCapture.TryCapture(overlay.SelectedBoundsInVirtualScreen, out var hdrImage)
-                ? hdrImage
-                : overlay.SelectedImage;
+            Bitmap selected;
+            using (var overlay = new CaptureOverlay(desktop))
+            {
+                _activeCaptureWindow=overlay;
+                var result=overlay.ShowDialog();
+                AppLog.Info($"Selection closed: {result}.");
+                if(result!=DialogResult.OK||overlay.SelectedImage is null)return;
+                selected=new Bitmap(overlay.SelectedImage);
+            }
+            using var selectedImage=selected;
             using var editor = new EditorForm(selected);
-            if (editor.ShowDialog() == DialogResult.OK) ClipboardWriter.CopyForSharing(editor.FinalImage!);
+            _activeCaptureWindow=editor;
+            editor.Shown+=(_,_)=>PresentCaptureWindow(editor);
+            AppLog.Info("Editor opening.");
+            var editorResult=editor.ShowDialog();
+            AppLog.Info($"Editor closed: {editorResult}.");
+            using var finalImage=editor.FinalImage;
+            if (editorResult == DialogResult.OK && finalImage is not null) ClipboardWriter.CopyForSharing(finalImage);
         }
         catch (Exception error)
         {
@@ -141,9 +153,25 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         finally
         {
+            _activeCaptureWindow=null;
             _capturing = false;
             AppLog.Info($"Capture flow finished; waiting for {_captureKey}.");
         }
+    }
+
+    internal static bool PresentCaptureWindow(Form? form)
+    {
+        if(form is null||form.IsDisposed)return false;
+        var dialog=form.OwnedForms.LastOrDefault(f=>f.Visible&&!f.IsDisposed)??form;
+        if(dialog.WindowState==FormWindowState.Minimized)dialog.WindowState=FormWindowState.Normal;
+        if(!Screen.AllScreens.Any(screen=>screen.WorkingArea.IntersectsWith(dialog.Bounds))){var area=Screen.PrimaryScreen!.WorkingArea;dialog.Location=new Point(area.Left+Math.Max(0,(area.Width-dialog.Width)/2),area.Top+Math.Max(0,(area.Height-dialog.Height)/2));}
+        dialog.Show();dialog.BringToFront();dialog.Activate();return true;
+    }
+
+    private void CancelCapture()
+    {
+        if(_activeCaptureWindow is EditorForm editor)editor.CancelCapture();
+        else if(_activeCaptureWindow is {IsDisposed:false} form){form.DialogResult=DialogResult.Cancel;form.Close();}
     }
 
     private static bool IsAutoStartEnabled()
@@ -169,6 +197,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        CancelCapture();
         _hotkeyWindow.Dispose();
         _dispatcher.Dispose();
         _trayIcon.Visible = false;

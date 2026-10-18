@@ -234,5 +234,11 @@ internal sealed class CaptureOverlay : Form
         TextRenderer.DrawText(graphics, text, Font, new Point(bounds.Left + 4, top + 2), Color.White, TextFormatFlags.EndEllipsis);
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing){_singleClickTimer.Stop();_singleClickTimer.Dispose();SelectedImage?.Dispose();SelectedImage=null;}
+        base.Dispose(disposing);
+    }
+
     private static Rectangle Normalize(Point a, Point b) => Rectangle.FromLTRB(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
 }

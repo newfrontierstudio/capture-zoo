@@ -71,7 +71,7 @@ internal sealed class EditorForm : Form
         _preferences = EditorPreferences.Load();
         _penColor = Color.FromArgb(_preferences.PaletteColors[_preferences.SelectedPaletteIndex]);
         _penWidth = _preferences.BrushSizes[_preferences.SelectedBrushSizeIndex];
-        Text = "CaptureZoo Ver.1.0";
+        Text = "CaptureZoo Ver."+Application.ProductVersion.Split('+')[0];
         Icon = AppIcon.Load();
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -330,12 +330,14 @@ internal sealed class EditorForm : Form
         base.OnKeyDown(e);
     }
 
+    internal void CancelCapture(){_cancelled=true;DialogResult=DialogResult.Cancel;Close();}
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         // Xボタン・Alt+F4など、Esc以外の方法で閉じられた場合はここでコピーを確定する。
         if (!_cancelled)
         {
-            FinalImage = new Bitmap(_image);
+            FinalImage ??= new Bitmap(_image);
             DialogResult = DialogResult.OK;
         }
         base.OnFormClosing(e);
