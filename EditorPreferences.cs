@@ -6,7 +6,8 @@ internal sealed class EditorPreferences
 {
     private const int PaletteCount = 12;
     private const int BrushCount = 5;
-    private static readonly string SettingsPath = Path.Combine(
+    internal static string? TestPath;
+    private static string SettingsPath => TestPath ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "CaptureZoo", "editor-preferences.json");
 
@@ -49,12 +50,14 @@ internal sealed class EditorPreferences
         catch (Exception error) { AppLog.Error(error); return new EditorPreferences(); }
     }
 
+    private string? _lastSaved;
     public void Save()
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            string json=JsonSerializer.Serialize(this,new JsonSerializerOptions{WriteIndented=true});if(json==_lastSaved)return;
+            File.WriteAllText(SettingsPath+".tmp",json);File.Move(SettingsPath+".tmp",SettingsPath,true);_lastSaved=json;
         }
         catch (Exception error) { AppLog.Error(error); }
     }

@@ -126,8 +126,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         AppLog.Info("Capture flow started.");
         try
         {
-            using var desktop = DesktopSnapshot.Capture();
             Bitmap selected;
+            using(var desktop = DesktopSnapshot.Capture())
             using (var overlay = new CaptureOverlay(desktop))
             {
                 _activeCaptureWindow=overlay;
@@ -136,8 +136,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 if(result!=DialogResult.OK||overlay.SelectedImage is null)return;
                 selected=new Bitmap(overlay.SelectedImage);
             }
-            using var selectedImage=selected;
-            using var editor = new EditorForm(selected);
+            EditorForm createdEditor;
+            using(selected)createdEditor=new EditorForm(selected);
+            using var editor=createdEditor;
             _activeCaptureWindow=editor;
             editor.Shown+=(_,_)=>PresentCaptureWindow(editor);
             AppLog.Info("Editor opening.");

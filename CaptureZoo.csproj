@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Product>CaptureZoo</Product><AssemblyTitle>CaptureZoo</AssemblyTitle><Version>1.0.1</Version><FileVersion>1.0.1.0</FileVersion><AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <Product>CaptureZoo</Product><AssemblyTitle>CaptureZoo</AssemblyTitle><Version>1.0.2</Version><FileVersion>1.0.2.0</FileVersion><AssemblyVersion>1.0.2.0</AssemblyVersion>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -20,4 +20,3 @@
   </ItemGroup>
   <ItemGroup><EmbeddedResource Include="capture.ico" /></ItemGroup>
 </Project>
-

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -58,16 +59,21 @@ internal sealed class EditorForm : Form
     private readonly FlowLayoutPanel _toolbar;
     private Color _penColor;
     private int _penWidth;
-    private Point? _last;
+    private PointF? _last;
+    private Graphics? _strokeGraphics;
+    private Pen? _strokePen;
+    private readonly Action<Image> _initialCopy;
+    private bool _initialCopyAttempted;
     private readonly List<Bitmap> _undoHistory = new();
     private readonly List<Bitmap> _redoHistory = new();
     private bool _cancelled;
 
     public Image? FinalImage { get; private set; }
 
-    public EditorForm(Bitmap image)
+    public EditorForm(Bitmap image, Action<Image>? initialCopy = null)
     {
         _image = new Bitmap(image);
+        _initialCopy = initialCopy ?? ClipboardWriter.CopyForSharing;
         _preferences = EditorPreferences.Load();
         _penColor = Color.FromArgb(_preferences.PaletteColors[_preferences.SelectedPaletteIndex]);
         _penWidth = _preferences.BrushSizes[_preferences.SelectedBrushSizeIndex];
@@ -164,7 +170,8 @@ internal sealed class EditorForm : Form
         _canvas.Image = _image;
         _canvas.MouseDown += CanvasMouseDown;
         _canvas.MouseMove += CanvasMouseMove;
-        _canvas.MouseUp += (_, _) => _last = null;
+        _canvas.MouseUp += (_, _) => EndStroke();
+        _canvas.MouseCaptureChanged += (_, _) => { if (!_canvas.Capture) EndStroke(); };
         _canvas.CanvasDoubleClick += (_, _) => CopyAndClose();
 
         _toolbarHost.Resize += (_, _) => CenterToolbar();
@@ -182,11 +189,12 @@ internal sealed class EditorForm : Form
 
     private void EditColor(int index)
     {
-        using var dialog = new ColorDialog { Color = Color.FromArgb(_preferences.PaletteColors[index]), FullOpen = true };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        _preferences.PaletteColors[index] = dialog.Color.ToArgb();
-        _swatchButtons[index].BackColor = dialog.Color;
-        SelectColor(index);
+        int original=_preferences.PaletteColors[index];Color originalPen=_penColor;
+        bool committed=false;
+        using var dialog = new ColorPickerDialog(Color.FromArgb(original));
+        dialog.ColorChanged+=color=>{_swatchButtons[index].BackColor=color;if(_preferences.SelectedPaletteIndex==index)_penColor=color;HighlightSelected();};
+        try{if(dialog.ShowDialog(this)!=DialogResult.OK)return;_preferences.PaletteColors[index]=dialog.SelectedColor.ToArgb();_swatchButtons[index].BackColor=dialog.SelectedColor;SelectColor(index);committed=true;}
+        finally{if(!committed){_swatchButtons[index].BackColor=Color.FromArgb(original);_penColor=originalPen;HighlightSelected();}}
     }
 
     private void SelectBrushSize(int index)
@@ -300,7 +308,8 @@ internal sealed class EditorForm : Form
         }
         if (keyData == Keys.Escape)
         {
-            // 何もコピーせずにキャンセル終了。
+            // 編集結果は追加コピーしない。開いた時点の画像はコピー済み。
+            EndStroke();
             _cancelled = true;
             DialogResult = DialogResult.Cancel;
             Close();
@@ -330,11 +339,12 @@ internal sealed class EditorForm : Form
         base.OnKeyDown(e);
     }
 
-    internal void CancelCapture(){_cancelled=true;DialogResult=DialogResult.Cancel;Close();}
+    internal void CancelCapture(){EndStroke();_cancelled=true;DialogResult=DialogResult.Cancel;Close();}
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        // Xボタン・Alt+F4など、Esc以外の方法で閉じられた場合はここでコピーを確定する。
+        EndStroke();
+        // Xボタン・Alt+F4などでは、編集済み画像をコピーして確定する。
         if (!_cancelled)
         {
             FinalImage ??= new Bitmap(_image);
@@ -346,7 +356,7 @@ internal sealed class EditorForm : Form
     private void CopyAndClose()
     {
         if (_cancelled || IsDisposed) return;
-        _last = null;
+        EndStroke();
         FinalImage = new Bitmap(_image);
         DialogResult = DialogResult.OK;
         Close();
@@ -355,37 +365,42 @@ internal sealed class EditorForm : Form
     private void CanvasMouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
-        PushHistory(_undoHistory, new Bitmap(_image));
-        ClearHistory(_redoHistory);
+        EndStroke();
         _last = ImagePoint(e.Location);
+        _canvas.Capture=true;
     }
 
     private void CanvasMouseMove(object? sender, MouseEventArgs e)
     {
         if (_last is null || e.Button != MouseButtons.Left) return;
         var next = ImagePoint(e.Location);
-        using var graphics = Graphics.FromImage(_image);
-        using var pen = new Pen(_penColor, _penWidth) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round };
-        graphics.DrawLine(pen, _last.Value, next);
-        _last = next;
-        _canvas.Invalidate();
+        if(next==_last.Value)return;
+        if(_strokeGraphics==null){PushHistory(_undoHistory,new Bitmap(_image));ClearHistory(_redoHistory);_strokeGraphics=Graphics.FromImage(_image);_strokeGraphics.SmoothingMode=SmoothingMode.AntiAlias;_strokeGraphics.PixelOffsetMode=PixelOffsetMode.HighQuality;_strokePen=new Pen(_penColor,_penWidth){StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round};}
+        var previous=_last.Value;
+        _strokeGraphics.DrawLine(_strokePen!,previous,next);_last=next;
+        var box=_canvas.ClientRectangle;float scale=Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height);float pad=_penWidth/2f+3;
+        var dirty=Rectangle.FromLTRB((int)Math.Floor((box.Width-_image.Width*scale)/2+(Math.Min(previous.X,next.X)-pad)*scale),(int)Math.Floor((box.Height-_image.Height*scale)/2+(Math.Min(previous.Y,next.Y)-pad)*scale),(int)Math.Ceiling((box.Width-_image.Width*scale)/2+(Math.Max(previous.X,next.X)+pad)*scale),(int)Math.Ceiling((box.Height-_image.Height*scale)/2+(Math.Max(previous.Y,next.Y)+pad)*scale));
+        _canvas.Invalidate(Rectangle.Intersect(dirty,box));
     }
 
-    private Point ImagePoint(Point point)
+    private void EndStroke(){_last=null;_strokePen?.Dispose();_strokePen=null;_strokeGraphics?.Dispose();_strokeGraphics=null;if(_canvas.Capture)_canvas.Capture=false;}
+
+    private PointF ImagePoint(Point point)
     {
         var box = _canvas.ClientRectangle;
-        var scale = Math.Min((float)box.Width / _image.Width, (float)box.Height / _image.Height);
-        var width = _image.Width * scale;
-        var height = _image.Height * scale;
-        var left = (box.Width - width) / 2;
-        var top = (box.Height - height) / 2;
-        return new Point(
-            Math.Clamp((int)((point.X - left) / scale), 0, _image.Width - 1),
-            Math.Clamp((int)((point.Y - top) / scale), 0, _image.Height - 1));
+        var scale = Math.Max(.0001f,Math.Min((float)box.Width / _image.Width, (float)box.Height / _image.Height));
+        return new PointF(Math.Clamp((point.X-(box.Width-_image.Width*scale)/2)/scale,0,_image.Width-1f),Math.Clamp((point.Y-(box.Height-_image.Height*scale)/2)/scale,0,_image.Height-1f));
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        if(!_initialCopyAttempted){_initialCopyAttempted=true;try{_initialCopy(_image);}catch(Exception error){AppLog.Error(error);Text+=" — コピー失敗（閉じると再試行）";}}
+        base.OnShown(e);
     }
 
     private void RestoreUndo()
     {
+        EndStroke();
         if (_undoHistory.Count == 0) return;
         PushHistory(_redoHistory, new Bitmap(_image));
         RestoreLast(_undoHistory);
@@ -393,6 +408,7 @@ internal sealed class EditorForm : Form
 
     private void RestoreRedo()
     {
+        EndStroke();
         if (_redoHistory.Count == 0) return;
         PushHistory(_undoHistory, new Bitmap(_image));
         RestoreLast(_redoHistory);
@@ -412,9 +428,8 @@ internal sealed class EditorForm : Form
     private static void PushHistory(List<Bitmap> history, Bitmap snapshot)
     {
         history.Add(snapshot);
-        if (history.Count <= HistoryLimit) return;
-        history[0].Dispose();
-        history.RemoveAt(0);
+        if(history.Count<=HistoryLimit)return;
+        history[0].Dispose();history.RemoveAt(0);
     }
 
     private static void ClearHistory(List<Bitmap> history)
@@ -427,6 +442,7 @@ internal sealed class EditorForm : Form
     {
         if (disposing)
         {
+            EndStroke();
             ClearHistory(_undoHistory);
             ClearHistory(_redoHistory);
             _image.Dispose();

@@ -34,6 +34,7 @@ internal sealed class CaptureOverlay : Form
     private Rectangle _selection;
     private Rectangle _hoveredWindow;
     private string _hoveredWindowTitle = string.Empty;
+    private List<(Rectangle Bounds,string Title)>? _windowCandidates;
 
     public Bitmap? SelectedImage { get; private set; }
     public Rectangle SelectedBoundsInVirtualScreen => new(_selection.X + _virtualScreen.Left, _selection.Y + _virtualScreen.Top, _selection.Width, _selection.Height);
@@ -59,6 +60,7 @@ internal sealed class CaptureOverlay : Form
 
     protected override void OnShown(EventArgs e)
     {
+        _windowCandidates=ReadWindowCandidates();
         base.OnShown(e);
         // F10 から起動しても、全モニター上の全アプリより手前へ確実に表示する。
         SetWindowPos(Handle, HwndTopmost, _virtualScreen.Left, _virtualScreen.Top, _virtualScreen.Width, _virtualScreen.Height, SwpShowWindow);
@@ -114,6 +116,7 @@ internal sealed class CaptureOverlay : Form
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        var previousSelection=_selection;var previousWindow=_hoveredWindow;var previousTitle=_hoveredWindowTitle;
         if (_start is not null)
         {
             var dragBounds = Normalize(_start.Value, e.Location);
@@ -124,7 +127,7 @@ internal sealed class CaptureOverlay : Form
         {
             UpdateHoveredWindow(e.Location);
         }
-        Invalidate();
+        if(previousSelection!=_selection||previousWindow!=_hoveredWindow||previousTitle!=_hoveredWindowTitle)Invalidate();
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
@@ -169,26 +172,24 @@ internal sealed class CaptureOverlay : Form
         _hoveredWindowTitle = candidate.Title;
     }
 
-    private (Rectangle Bounds, string Title) FindTopLevelWindowAt(Point desktopPoint)
+    private (Rectangle Bounds,string Title) FindTopLevelWindowAt(Point desktopPoint)
     {
-        var result = (Bounds: Rectangle.Empty, Title: string.Empty);
-        EnumWindows((handle, _) =>
-        {
-            if (handle == Handle || !IsWindowVisible(handle) || !GetWindowRect(handle, out var native)) return true;
-            var screenBounds = Rectangle.FromLTRB(native.Left, native.Top, native.Right, native.Bottom);
-            if (screenBounds.Width < 4 || screenBounds.Height < 4 || !screenBounds.Contains(desktopPoint)) return true;
+        var local=new Point(desktopPoint.X-_virtualScreen.Left,desktopPoint.Y-_virtualScreen.Top);
+        foreach(var window in _windowCandidates??=ReadWindowCandidates())if(window.Bounds.Contains(local))return window;
+        return (Rectangle.Empty,string.Empty);
+    }
 
-            var localBounds = Rectangle.Intersect(
-                new Rectangle(screenBounds.Left - _virtualScreen.Left, screenBounds.Top - _virtualScreen.Top, screenBounds.Width, screenBounds.Height),
-                ClientRectangle);
-            if (localBounds.Width < 4 || localBounds.Height < 4) return true;
-
-            var title = new StringBuilder(512);
-            GetWindowText(handle, title, title.Capacity);
-            result = (localBounds, title.ToString());
-            return false;
-        }, IntPtr.Zero);
-        return result;
+    private List<(Rectangle Bounds,string Title)> ReadWindowCandidates()
+    {
+        var windows=new List<(Rectangle Bounds,string Title)>();
+        // The captured desktop is frozen, so its window geometry is captured once too.
+        EnumWindows((handle,_)=>{
+            if(handle==Handle||!IsWindowVisible(handle)||!GetWindowRect(handle,out var native))return true;
+            var bounds=Rectangle.Intersect(new Rectangle(native.Left-_virtualScreen.Left,native.Top-_virtualScreen.Top,native.Right-native.Left,native.Bottom-native.Top),ClientRectangle);
+            if(bounds.Width<4||bounds.Height<4)return true;
+            var title=new StringBuilder(512);GetWindowText(handle,title,title.Capacity);windows.Add((bounds,title.ToString()));return true;
+        },IntPtr.Zero);
+        return windows;
     }
 
     private void CompleteSelection()
