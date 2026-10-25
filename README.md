@@ -1,6 +1,6 @@
-# CaptureZoo Ver.1.0.2
+# CaptureZoo Ver.1.0.3
 
-画面の必要な範囲を切り取り、ペンで書き込んで、そのままコピーできるWindows用の無料ツールです。画像をファイルに保存する手間を省き、チャットやメールへ手早く貼り付けられます。
+画面の必要な範囲を切り取り、ペンで書き込んで、そのままコピーできるWindows用の無料ツールです。LINEやメールに画像を貼り付けて共有できます。必要な部分だけを切り取り、説明や目印を書き込んで、手早く送れます。
 
 ## 使い方
 
@@ -28,7 +28,7 @@ Windows起動時の自動起動も切り替えられます。他のアプリと�
 
 ## ダウンロード
 
-Windows 10/11（64ビット）向け。[リリースページ](https://github.com/newfrontierstudio/capture-zoo/releases/latest)にインストーラーとソースを添付しています。.NET実行環境は同梱しており、別途インストールは不要です。
+Windows 10/11（64ビット）向け。[リリースページ](https://github.com/newfrontierstudio/capture-zoo/releases/latest)にインストーラーとソースを添付しています。.NET 8 Desktop Runtime（64ビット）が必要です。未導入の場合はインストーラーがMicrosoftから取得して導入します（インターネット接続と管理者の許可が必要です）。
 
 更新時はCaptureZooを終了し、上書きインストールしてください。設定は `%LOCALAPPDATA%\CaptureZoo` に保存され、アンインストール後も残ります。実行ファイルは未署名です。
 
