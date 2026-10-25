@@ -64,6 +64,7 @@ internal sealed class EditorForm : Form
     private Pen? _strokePen;
     private readonly Action<Image> _initialCopy;
     private bool _initialCopyAttempted;
+    private bool _strokeChanged;
     private readonly List<Bitmap> _undoHistory = new();
     private readonly List<Bitmap> _redoHistory = new();
     private bool _cancelled;
@@ -309,7 +310,7 @@ internal sealed class EditorForm : Form
         if (keyData == Keys.Escape)
         {
             // 編集結果は追加コピーしない。開いた時点の画像はコピー済み。
-            EndStroke();
+            FinishStroke(false);
             _cancelled = true;
             DialogResult = DialogResult.Cancel;
             Close();
@@ -339,27 +340,17 @@ internal sealed class EditorForm : Form
         base.OnKeyDown(e);
     }
 
-    internal void CancelCapture(){EndStroke();_cancelled=true;DialogResult=DialogResult.Cancel;Close();}
-
+    internal void CancelCapture(){FinishStroke(false);_cancelled=true;DialogResult=DialogResult.Cancel;Close();}
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        EndStroke();
-        // Xボタン・Alt+F4などでは、編集済み画像をコピーして確定する。
-        if (!_cancelled)
-        {
-            FinalImage ??= new Bitmap(_image);
-            DialogResult = DialogResult.OK;
-        }
+        // Closing must not replace another editor's clipboard image.
+        FinishStroke(false);
         base.OnFormClosing(e);
     }
-
     private void CopyAndClose()
     {
         if (_cancelled || IsDisposed) return;
-        EndStroke();
-        FinalImage = new Bitmap(_image);
-        DialogResult = DialogResult.OK;
-        Close();
+        FinishStroke(false);CopyCurrentImage();Close();
     }
 
     private void CanvasMouseDown(object? sender, MouseEventArgs e)
@@ -377,13 +368,26 @@ internal sealed class EditorForm : Form
         if(next==_last.Value)return;
         if(_strokeGraphics==null){PushHistory(_undoHistory,new Bitmap(_image));ClearHistory(_redoHistory);_strokeGraphics=Graphics.FromImage(_image);_strokeGraphics.SmoothingMode=SmoothingMode.AntiAlias;_strokeGraphics.PixelOffsetMode=PixelOffsetMode.HighQuality;_strokePen=new Pen(_penColor,_penWidth){StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round};}
         var previous=_last.Value;
-        _strokeGraphics.DrawLine(_strokePen!,previous,next);_last=next;
+        _strokeGraphics.DrawLine(_strokePen!,previous,next);_last=next;_strokeChanged=true;
         var box=_canvas.ClientRectangle;float scale=Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height);float pad=_penWidth/2f+3;
         var dirty=Rectangle.FromLTRB((int)Math.Floor((box.Width-_image.Width*scale)/2+(Math.Min(previous.X,next.X)-pad)*scale),(int)Math.Floor((box.Height-_image.Height*scale)/2+(Math.Min(previous.Y,next.Y)-pad)*scale),(int)Math.Ceiling((box.Width-_image.Width*scale)/2+(Math.Max(previous.X,next.X)+pad)*scale),(int)Math.Ceiling((box.Height-_image.Height*scale)/2+(Math.Max(previous.Y,next.Y)+pad)*scale));
         _canvas.Invalidate(Rectangle.Intersect(dirty,box));
     }
 
-    private void EndStroke(){_last=null;_strokePen?.Dispose();_strokePen=null;_strokeGraphics?.Dispose();_strokeGraphics=null;if(_canvas.Capture)_canvas.Capture=false;}
+    private void EndStroke() => FinishStroke(true);
+    private void FinishStroke(bool copy)
+    {
+        bool changed=_strokeChanged;_strokeChanged=false;_last=null;
+        _strokePen?.Dispose();_strokePen=null;_strokeGraphics?.Dispose();_strokeGraphics=null;
+        if(_canvas.Capture)_canvas.Capture=false;
+        if(changed && copy) CopyCurrentImage();
+    }
+    private void CopyCurrentImage()
+    {
+        const string warning=" — コピー失敗（描画またはダブルクリックで再試行）";
+        try{_initialCopy(_image);Text=Text.Replace(warning, "");}
+        catch(Exception error){AppLog.Error(error);if(!Text.EndsWith(warning))Text+=warning;}
+    }
 
     private PointF ImagePoint(Point point)
     {
@@ -394,7 +398,7 @@ internal sealed class EditorForm : Form
 
     protected override void OnShown(EventArgs e)
     {
-        if(!_initialCopyAttempted){_initialCopyAttempted=true;try{_initialCopy(_image);}catch(Exception error){AppLog.Error(error);Text+=" — コピー失敗（閉じると再試行）";}}
+        if(!_initialCopyAttempted){_initialCopyAttempted=true;CopyCurrentImage();}
         base.OnShown(e);
     }
 
@@ -419,10 +423,10 @@ internal sealed class EditorForm : Form
         var lastIndex = history.Count - 1;
         var snapshot = history[lastIndex];
         history.RemoveAt(lastIndex);
-        using var graphics = Graphics.FromImage(_image);
-        graphics.DrawImageUnscaled(snapshot, 0, 0);
+        using (var graphics = Graphics.FromImage(_image)) graphics.DrawImageUnscaled(snapshot, 0, 0);
         snapshot.Dispose();
         _canvas.Invalidate();
+        CopyCurrentImage();
     }
 
     private static void PushHistory(List<Bitmap> history, Bitmap snapshot)
@@ -442,7 +446,7 @@ internal sealed class EditorForm : Form
     {
         if (disposing)
         {
-            EndStroke();
+            FinishStroke(false);
             ClearHistory(_undoHistory);
             ClearHistory(_redoHistory);
             _image.Dispose();

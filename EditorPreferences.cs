@@ -57,7 +57,9 @@ internal sealed class EditorPreferences
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             string json=JsonSerializer.Serialize(this,new JsonSerializerOptions{WriteIndented=true});if(json==_lastSaved)return;
-            File.WriteAllText(SettingsPath+".tmp",json);File.Move(SettingsPath+".tmp",SettingsPath,true);_lastSaved=json;
+            string temporary=SettingsPath+"."+Guid.NewGuid().ToString("N")+".tmp";
+            try{File.WriteAllText(temporary,json);File.Move(temporary,SettingsPath,true);_lastSaved=json;}
+            finally{if(File.Exists(temporary))File.Delete(temporary);}
         }
         catch (Exception error) { AppLog.Error(error); }
     }

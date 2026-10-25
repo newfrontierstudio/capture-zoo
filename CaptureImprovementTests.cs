@@ -23,7 +23,28 @@ internal static class CaptureImprovementTests
    type.GetMethod("RestoreUndo",Private)!.Invoke(editor,null);if(image.GetPixel(60,45).ToArgb()!=Color.White.ToArgb())throw new Exception("Undo did not remove antialiased stroke");type.GetMethod("RestoreRedo",Private)!.Invoke(editor,null);
    var buttons=(List<Button>)type.GetField("_swatchButtons",Private)!.GetValue(editor)!;var initial=buttons[0].BackColor;Exception? failure=null;using var timer=new System.Windows.Forms.Timer{Interval=80};timer.Tick+=(_,_)=>{var dialog=Application.OpenForms.OfType<ColorPickerDialog>().FirstOrDefault();if(dialog==null)return;timer.Stop();try{dialog.SetColor(Color.CornflowerBlue);if(buttons[0].BackColor.ToArgb()!=Color.CornflowerBlue.ToArgb())throw new Exception("Palette does not preview color live");}catch(Exception error){failure=error;}dialog.DialogResult=DialogResult.Cancel;dialog.Close();};timer.Start();type.GetMethod("EditColor",Private)!.Invoke(editor,[0]);if(failure!=null)throw failure;if(buttons[0].BackColor.ToArgb()!=initial.ToArgb())throw new Exception("Cancel did not restore palette");
   }
+  int updates=0;
+  using(var editor=new EditorForm(source,_=>updates++))
+  using(var second=new EditorForm(source,_=>updates++)){
+   editor.Show();second.Show();Application.DoEvents();
+   if(!editor.Visible||!second.Visible||updates!=2)throw new Exception($"Independent editors: visible={editor.Visible}/{second.Visible}, copies={updates}");
+   var type=typeof(EditorForm);var canvas=(PictureBox)type.GetField("_canvas",Private)!.GetValue(editor)!;
+   type.GetMethod("CanvasMouseDown",Private)!.Invoke(editor,[canvas,new MouseEventArgs(MouseButtons.Left,1,20,20,0)]);
+   type.GetMethod("CanvasMouseMove",Private)!.Invoke(editor,[canvas,new MouseEventArgs(MouseButtons.Left,0,80,50,0)]);
+   if(updates!=2)throw new Exception("Clipboard updated before pen release");
+   type.GetMethod("EndStroke",Private)!.Invoke(editor,null);
+   if(updates!=3)throw new Exception("Pen release must copy exactly once despite capture loss");
+   type.GetMethod("EndStroke",Private)!.Invoke(editor,null);
+   if(updates!=3)throw new Exception("Repeated stroke cleanup copied again");
+   type.GetMethod("RestoreUndo",Private)!.Invoke(editor,null);
+   type.GetMethod("RestoreRedo",Private)!.Invoke(editor,null);
+   if(updates!=5)throw new Exception("Undo and redo did not refresh clipboard");
+   type.GetMethod("CanvasMouseDown",Private)!.Invoke(editor,[canvas,new MouseEventArgs(MouseButtons.Left,1,20,20,0)]);
+   type.GetMethod("CanvasMouseMove",Private)!.Invoke(editor,[canvas,new MouseEventArgs(MouseButtons.Left,0,90,60,0)]);
+   second.Close();editor.Close();
+   if(updates!=5)throw new Exception("Closing an editor overwrote the shared clipboard");
+  }
   var history=new List<Bitmap>();try{var push=typeof(EditorForm).GetMethod("PushHistory",BindingFlags.Static|BindingFlags.NonPublic)!;for(int i=0;i<24;i++)push.Invoke(null,[history,new Bitmap(32,32)]);if(history.Count!=20)throw new Exception("Original 20-step history limit changed");}finally{foreach(var bitmap in history)bitmap.Dispose();}
-  File.WriteAllText(Path.Combine(root,"improvement-results.txt"),"PASS initial copy before Shown with fake clipboard; cancellation; fractional zoom coordinates; antialiased pen pixels; stroke context reuse; undo/redo; live HSV picker preview and Cancel restoration; original 20-step history retained; no full-image history copy for a click without drawing. No desktop capture or real clipboard changes.");
+  File.WriteAllText(Path.Combine(root,"improvement-results.txt"),"PASS release-to-copy exactly once; no copy on close, even unfinished stroke; simultaneous independent editors; undo/redo clipboard refresh; initial copy before Shown with fake clipboard; cancellation; fractional zoom coordinates; antialiased pen pixels; stroke context reuse; undo/redo; live HSV picker preview and Cancel restoration; original 20-step history retained; no full-image history copy for a click without drawing. No desktop capture or real clipboard changes.");
  }
 }

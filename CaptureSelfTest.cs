@@ -36,7 +36,7 @@ internal static class CaptureSelfTest
             using(var disposed=new Form()){disposed.Dispose();if(TrayApplicationContext.PresentCaptureWindow(disposed))throw new Exception("Disposed window must not be restored");}
             if(TrayApplicationContext.PresentCaptureWindow(null))throw new Exception("Missing window must not be restored");
             CaptureImprovementTests.Run(source,root);
-            Console.WriteLine("PASS: icon, editor initialization, undo, redo, source image isolation, initial-copy timing, anti-aliased strokes and color preview. No screen capture or clipboard writes.");return 0;
+            Console.WriteLine("PASS: icon, editor initialization, undo, redo, source image isolation, initial-copy timing, pen-release copies, no copy on close, simultaneous editors, anti-aliased strokes and color preview. No screen capture or clipboard writes.");return 0;
         }catch(Exception error){Console.Error.WriteLine(error);return 1;}finally{EditorPreferences.TestPath=previous;}
     }
 }

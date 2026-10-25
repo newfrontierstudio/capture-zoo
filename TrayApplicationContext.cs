@@ -19,6 +19,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly HotkeyWindow _hotkeyWindow;
     private readonly ToolStripMenuItem _autoStartItem;
     private bool _capturing;
+    private readonly List<EditorForm> _editors = new();
     private Form? _activeCaptureWindow;
     private Keys _captureKey = Keys.F10;
     private readonly ToolStripMenuItem _captureItem;
@@ -86,8 +87,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _dispatcher.BeginInvoke((Action)RunCaptureFlow);
         };
 
+        if(System.Diagnostics.Process.GetProcessesByName("CaptureZoo").Length > 1) _dispatcher.BeginInvoke((Action)RunCaptureFlow);
+
         AppLog.Info($"Tray daemon started. {_captureKey} registration: {_hotkeyWindow.IsRegistered}.");
-        if(!_hotkeyWindow.IsRegistered)_trayIcon.ShowBalloonTip(5000,"CaptureZoo",$"{_captureKey}を登録できません。アイコンの右クリックで別のキーを選んでください。",ToolTipIcon.Warning);
+        if(!_hotkeyWindow.IsRegistered && System.Diagnostics.Process.GetProcessesByName("CaptureZoo").Length <= 1)_trayIcon.ShowBalloonTip(5000,"CaptureZoo",$"{_captureKey}を登録できません。アイコンの右クリックで別のキーを選んでください。",ToolTipIcon.Warning);
     }
 
     private void ChangeHotkey(Keys key)
@@ -138,14 +141,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             }
             EditorForm createdEditor;
             using(selected)createdEditor=new EditorForm(selected);
-            using var editor=createdEditor;
-            _activeCaptureWindow=editor;
-            editor.Shown+=(_,_)=>PresentCaptureWindow(editor);
-            AppLog.Info("Editor opening.");
-            var editorResult=editor.ShowDialog();
-            AppLog.Info($"Editor closed: {editorResult}.");
-            using var finalImage=editor.FinalImage;
-            if (editorResult == DialogResult.OK && finalImage is not null) ClipboardWriter.CopyForSharing(finalImage);
+            var editor=createdEditor;
+            _editors.Add(editor);
+            editor.FormClosed+=(_,_)=>{_editors.Remove(editor);editor.Dispose();};
+            editor.Show();
+            PresentCaptureWindow(editor);
         }
         catch (Exception error)
         {
@@ -171,7 +171,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void CancelCapture()
     {
-        if(_activeCaptureWindow is EditorForm editor)editor.CancelCapture();
+        if(_editors.LastOrDefault(e=>!e.IsDisposed) is EditorForm editor && !_capturing)editor.CancelCapture();
         else if(_activeCaptureWindow is {IsDisposed:false} form){form.DialogResult=DialogResult.Cancel;form.Close();}
     }
 
@@ -199,6 +199,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         CancelCapture();
+        foreach(var editor in _editors.ToArray())editor.CancelCapture();
         _hotkeyWindow.Dispose();
         _dispatcher.Dispose();
         _trayIcon.Visible = false;

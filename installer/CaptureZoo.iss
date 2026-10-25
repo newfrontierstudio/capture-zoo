@@ -1,7 +1,7 @@
 [Setup]
 AppId={{0C7E70AD-F371-48F7-9778-2162C98EA2DC}
 AppName=CaptureZoo
-AppVersion=1.0.3
+AppVersion=1.0.4
 AppPublisher=newfrontierstudio
 AppPublisherURL=https://github.com/newfrontierstudio/capture-zoo
 DefaultDirName={localappdata}\Programs\CaptureZoo
@@ -11,7 +11,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..\artifacts
-OutputBaseFilename=CaptureZoo-1.0.3-Setup-x64
+OutputBaseFilename=CaptureZoo-1.0.4-Setup-x64
 SetupIconFile=..\capture.ico
 UninstallDisplayIcon={app}\CaptureZoo.exe
 Compression=lzma2

@@ -5,22 +5,10 @@ namespace CaptureZoo;
 
 internal static class Program
 {
-    private static Mutex? _singleInstanceMutex;
-
     [STAThread]
     private static void Main(string[] args)
     {
         if(args.Contains("--self-test")){Environment.ExitCode=CaptureSelfTest.Run();return;}
-        // 二重起動防止。すでにトレイに常駐していれば、そちらを使ってもらう。
-        _singleInstanceMutex = new Mutex(initiallyOwned: true, "Global\\CaptureZoo_SingleInstance", out var createdNew);
-        if (!createdNew)
-        {
-            MessageBox.Show(
-                "CaptureZoo はすでに起動しています(タスクトレイを確認してください)。",
-                "CaptureZoo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
         try
         {
             AppLog.Info("Application started.");
@@ -34,10 +22,7 @@ internal static class Program
             AppLog.Error(error);
             MessageBox.Show("起動に失敗しました。CaptureZoo.log を送ってください。", "CaptureZoo");
         }
-        finally
-        {
-            _singleInstanceMutex.ReleaseMutex();
-        }
+
     }
 }
 
