@@ -4,6 +4,8 @@ SNS投稿や、LINE・メールでの画像共有に。F10で画面の範囲を�
 
 画像は自動でクリップボードに入るので、共有先へ貼り付けて使えます。
 
+キャプチャの初期キーはF10です。トレイアイコンを右クリックし、「ショートカットキー」からF1〜F12に変更できます。
+
 - 速く描いた線を曲線で補間し、細かな入力の揺れと角張りを抑えます。細いペンにも曲線近似を適用します。
 - ペンのプレビューと画像の拡大縮小はDirect2DでGPU描画します。非対応環境ではCPU方式へ切り替えます。
 - 画像を開いた時と、ペンを離した時にクリップボードを更新します。
@@ -13,7 +15,7 @@ SNS投稿や、LINE・メールでの画像共有に。F10で画面の範囲を�
 
 ## English
 
-Create annotated screenshots for social posts, LINE, and email. Press F10 to select a screen region, draw circles, arrows, or notes, and paste the image into a supported app. The image is copied when the editor opens and after each pen stroke. Closing the editor keeps the current clipboard contents.
+Create annotated screenshots for social posts, LINE, and email. Press F10 to select a screen region, draw circles, arrows, or notes, and paste the image into a supported app. F10 is the default capture key; right-click the tray icon and choose Capture shortcut to select another key from F1–F12. The image is copied when the editor opens and after each pen stroke. Closing the editor keeps the current clipboard contents.
 
 Pen preview and image scaling use hardware-accelerated Direct2D, with a CPU fallback. Fast strokes use smooth curve interpolation and input stabilization. Multiple editors, undo/redo, and live color previews are supported. The interface follows your Windows display language; choose Japanese or English from the tray Language menu.
 
