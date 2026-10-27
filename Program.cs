@@ -20,7 +20,7 @@ internal static class Program
         catch (Exception error)
         {
             AppLog.Error(error);
-            MessageBox.Show("起動に失敗しました。CaptureZoo.log を送ってください。", "CaptureZoo");
+            MessageBox.Show(UiLanguage.T("起動に失敗しました。CaptureZoo.log を送ってください。"), "CaptureZoo");
         }
 
     }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Product>CaptureZoo</Product><AssemblyTitle>CaptureZoo</AssemblyTitle><Version>1.0.4</Version><FileVersion>1.0.4.0</FileVersion><AssemblyVersion>1.0.4.0</AssemblyVersion>
+    <Product>CaptureZoo</Product><AssemblyTitle>CaptureZoo</AssemblyTitle><Version>1.0.8</Version><FileVersion>1.0.8.0</FileVersion><AssemblyVersion>1.0.8.0</AssemblyVersion>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -11,6 +11,7 @@
     <ApplicationIcon>capture.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
   </ItemGroup>

@@ -43,7 +43,7 @@ internal sealed class CaptureOverlay : Form
     {
         _desktop = desktop;
         _virtualScreen = SystemInformation.VirtualScreen;
-        Text = "CaptureZoo - 範囲選択";
+        Text = UiLanguage.T("CaptureZoo - 範囲選択");
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         Bounds = _virtualScreen;
@@ -89,7 +89,7 @@ internal sealed class CaptureOverlay : Form
         var description = isFreeSelection
             ? $"{bounds.Width} × {bounds.Height}"
             : string.IsNullOrWhiteSpace(_hoveredWindowTitle)
-                ? $"ウィンドウ  {bounds.Width} × {bounds.Height}"
+                ? UiLanguage.F("ウィンドウ  {0} × {1}",bounds.Width,bounds.Height)
                 : $"{_hoveredWindowTitle}  {bounds.Width} × {bounds.Height}";
         DrawLabel(e.Graphics, bounds, description);
     }

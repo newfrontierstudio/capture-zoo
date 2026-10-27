@@ -40,9 +40,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 && savedKey >= Keys.F1 && savedKey <= Keys.F12) _captureKey = savedKey;
         }
         catch (Exception error) { AppLog.Error(error); }
-        _captureItem = new ToolStripMenuItem($"今すぐキャプチャ ({_captureKey})");
+        _captureItem = new ToolStripMenuItem(UiLanguage.F("今すぐキャプチャ ({0})",_captureKey));
         var captureItem = _captureItem;
-        _hotkeyMenu = new ToolStripMenuItem("ショートカットキー");
+        _hotkeyMenu = new ToolStripMenuItem(UiLanguage.T("ショートカットキー"));
         for (var number = 1; number <= 12; number++)
         {
             var key = (Keys)((int)Keys.F1 + number - 1);
@@ -52,19 +52,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         captureItem.Click += (_, _) => RunCaptureFlow();
 
-        _autoStartItem = new ToolStripMenuItem("Windows起動時に自動起動")
+        _autoStartItem = new ToolStripMenuItem(UiLanguage.T("Windows起動時に自動起動"))
         {
             CheckOnClick = true,
             Checked = IsAutoStartEnabled()
         };
         _autoStartItem.CheckedChanged += (_, _) => SetAutoStart(_autoStartItem.Checked);
 
-        var exitItem = new ToolStripMenuItem("終了");
+        var exitItem = new ToolStripMenuItem(UiLanguage.T("終了"));
         exitItem.Click += (_, _) => ExitThread();
 
         menu.Items.Add(captureItem);
         menu.Items.Add(_hotkeyMenu);
-        menu.Items.Add("キャプチャを中止して待機に戻る", null, (_, _) => CancelCapture());
+        menu.Items.Add(UiLanguage.T("キャプチャを中止して待機に戻る"), null, (_, _) => CancelCapture());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -73,11 +73,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _trayIcon = new NotifyIcon
         {
             Icon = _appIcon,
-            Text = $"CaptureZoo ({_captureKey}でキャプチャ)",
+            Text = UiLanguage.F("CaptureZoo ({0}でキャプチャ)",_captureKey),
             Visible = true,
             ContextMenuStrip = menu
         };
         _trayIcon.DoubleClick += (_, _) => RunCaptureFlow();
+        var languageMenu=new ToolStripMenuItem("Language / 言語");menu.Items.Insert(menu.Items.Count-1,languageMenu);
+        foreach(var value in new[]{"auto","ja","en"}){string choice=value;var item=new ToolStripMenuItem(choice=="ja"?"日本語":choice=="en"?"English":UiLanguage.T("自動（Windows）")){Tag=choice,Checked=UiLanguage.Selection==choice};languageMenu.DropDownItems.Add(item);
+            item.Click+=(_,_)=>{try{UiLanguage.Set(choice);foreach(ToolStripItem entry in menu.Items)UiLanguage.Apply(entry);_captureItem.Text=UiLanguage.F("今すぐキャプチャ ({0})",_captureKey);_trayIcon.Text=UiLanguage.F("CaptureZoo ({0}でキャプチャ)",_captureKey);foreach(ToolStripMenuItem option in languageMenu.DropDownItems)option.Checked=(string)option.Tag! == choice;foreach(var editor in _editors)editor.ApplyLanguage();}catch(Exception error){MessageBox.Show(error.Message,"CaptureZoo");}};
+        }
+
 
         _hotkeyWindow = new HotkeyWindow(HotkeyId, _captureKey);
         _ = _dispatcher.Handle;
@@ -90,7 +95,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if(System.Diagnostics.Process.GetProcessesByName("CaptureZoo").Length > 1) _dispatcher.BeginInvoke((Action)RunCaptureFlow);
 
         AppLog.Info($"Tray daemon started. {_captureKey} registration: {_hotkeyWindow.IsRegistered}.");
-        if(!_hotkeyWindow.IsRegistered && System.Diagnostics.Process.GetProcessesByName("CaptureZoo").Length <= 1)_trayIcon.ShowBalloonTip(5000,"CaptureZoo",$"{_captureKey}を登録できません。アイコンの右クリックで別のキーを選んでください。",ToolTipIcon.Warning);
+        if(!_hotkeyWindow.IsRegistered && System.Diagnostics.Process.GetProcessesByName("CaptureZoo").Length <= 1)_trayIcon.ShowBalloonTip(5000,"CaptureZoo",UiLanguage.F("{0}を登録できません。アイコンの右クリックで別のキーを選んでください。",_captureKey),ToolTipIcon.Warning);
     }
 
     private void ChangeHotkey(Keys key)
@@ -98,7 +103,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (key == _captureKey && _hotkeyWindow.IsRegistered) return;
         if (!_hotkeyWindow.TryChangeKey(key))
         {
-            MessageBox.Show($"{key} は他のアプリで使用されています。別のキーを選んでください。",
+            MessageBox.Show(UiLanguage.F("{0} は他のアプリで使用されています。別のキーを選んでください。",key),
                 "CaptureZoo", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -112,12 +117,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _hotkeyWindow.TryChangeKey(previous);
             AppLog.Error(error);
-            MessageBox.Show("ショートカット設定を保存できませんでした。", "CaptureZoo");
+            MessageBox.Show(UiLanguage.T("ショートカット設定を保存できませんでした。"), "CaptureZoo");
             return;
         }
         _captureKey = key;
-        _captureItem.Text = $"今すぐキャプチャ ({key})";
-        _trayIcon.Text = $"CaptureZoo ({key}でキャプチャ)";
+        _captureItem.Text = UiLanguage.F("今すぐキャプチャ ({0})",key);
+        _trayIcon.Text = UiLanguage.F("CaptureZoo ({0}でキャプチャ)",key);
         foreach (ToolStripMenuItem item in _hotkeyMenu.DropDownItems) item.Checked = (Keys)item.Tag! == key;
         AppLog.Info($"Capture hotkey changed to {key}.");
     }
@@ -150,7 +155,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         catch (Exception error)
         {
             AppLog.Error(error);
-            MessageBox.Show("キャプチャに失敗しました。CaptureZoo.log を送ってください。", "CaptureZoo");
+            MessageBox.Show(UiLanguage.T("キャプチャに失敗しました。CaptureZoo.log を送ってください。"), "CaptureZoo");
         }
         finally
         {

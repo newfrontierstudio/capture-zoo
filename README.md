@@ -1,41 +1,25 @@
-# CaptureZoo Ver.1.0.4
+# CaptureZoo 1.0.8
 
-画面の必要な範囲を切り取り、ペンで書き込んで、そのままコピーできるWindows用の無料ツールです。LINEやメールに画像を貼り付けて共有できます。必要な部分だけを切り取り、説明や目印を書き込んで、手早く送れます。
+SNS投稿や、LINE・メールでの画像共有に。F10で画面の範囲を選び、ペンで丸や矢印、メモを書き込めるスクリーンショットアプリです。
 
-## 使い方
+画像は自動でクリップボードに入るので、共有先へ貼り付けて使えます。
 
-1. インストーラーを実行し、CaptureZooを起動します。通知領域に常駐します。
-2. **F10**を押し、撮りたい範囲をマウスでドラッグします。ウィンドウをクリックして選ぶこともできます。
-3. 編集画面が開いた時点で画像をクリップボードへコピーします。必要に応じて線や囲みを書き込めます。
-4. ペンを離すたびに、書き込み済み画像へコピーを更新します。元に戻す・やり直す操作でも更新します。×ボタンで閉じても追加コピーしません。画像のダブルクリックではコピーして閉じます。
-5. 貼り付け先で **Ctrl＋V** を押します。
+- 速く描いた線を曲線で補間し、細かな入力の揺れと角張りを抑えます。細いペンにも曲線近似を適用します。
+- ペンのプレビューと画像の拡大縮小はDirect2DでGPU描画します。非対応環境ではCPU方式へ切り替えます。
+- 画像を開いた時と、ペンを離した時にクリップボードを更新します。
+- 日本語／Englishに対応。Windowsの表示言語に合わせ、トレイのLanguageメニューから切り替えられます。
+- 複数の編集画面、元に戻す・やり直し、色とブラシサイズの変更に対応。
+- HDR画面の取得にはDirect3D 11を使用し、対応しない環境では通常方式で取得します。
 
-範囲選択を取り消すときは **Esc**。Escや×で閉じてもクリップボードは変更しません。最後にコピーされた画像が残ります。
+## English
 
-## 書き込み・編集
+Create annotated screenshots for social posts, LINE, and email. Press F10 to select a screen region, draw circles, arrows, or notes, and paste the image into a supported app. The image is copied when the editor opens and after each pen stroke. Closing the editor keeps the current clipboard contents.
 
-- ペンの色と太さを選んで、画像へ自由に書き込めます。
-- 色見本をダブルクリックすると、Studioと同じ形式のHSV・RGB・HEXカラーピッカーで編集できます。色は即時プレビューされ、キャンセルで戻ります。
-- 太さのボタンをダブルクリックすると、登録サイズを変更できます。
-- **Ctrl＋Z**で元に戻す、**Ctrl＋Y／Ctrl＋Shift＋Z**でやり直せます。
-- コピーは共有向けの画像処理を行います。元の画面を無劣化で保存する用途には向きません。
+Pen preview and image scaling use hardware-accelerated Direct2D, with a CPU fallback. Fast strokes use smooth curve interpolation and input stabilization. Multiple editors, undo/redo, and live color previews are supported. The interface follows your Windows display language; choose Japanese or English from the tray Language menu.
 
-## 常駐・ショートカット
+Windows 10/11 x64. The installer downloads the Microsoft .NET 8 Desktop Runtime only if needed. Settings are kept when updating.
 
-通知領域のアイコンをダブルクリックしてもキャプチャを開始できます。編集中でも呼び出しキーで次のキャプチャを開始でき、複数の編集画面を開けます。アプリの複数起動にも対応しています。同じショートカットキーは先に起動したアプリが受け取ります。「キャプチャを中止して待機に戻る」で、編集結果を追加コピーせず中止できます。右クリックメニューから、呼び出しキーを **F1〜F12**に変更できます。色・ペンの太さ・呼び出しキーの設定は保存されます。
+## Build / License
 
-Windows起動時の自動起動も切り替えられます。他のアプリとキーが重なる場合は、別のキーを選んでください。アプリを終了するには、通知領域の右クリックメニューで「終了」を選びます。
-
-## ダウンロード
-
-Windows 10/11（64ビット）向け。[リリースページ](https://github.com/newfrontierstudio/capture-zoo/releases/latest)にインストーラーとソースを添付しています。.NET 8 Desktop Runtime（64ビット）が必要です。未導入の場合はインストーラーがMicrosoftから取得して導入します（インターネット接続と管理者の許可が必要です）。
-
-更新時はCaptureZooを終了し、上書きインストールしてください。設定は `%LOCALAPPDATA%\CaptureZoo` に保存され、アンインストール後も残ります。実行ファイルは未署名です。
-
-## ソースからビルド
-
-.NET 8 SDKとInno Setup 6を用意し、`scripts/build.ps1` を実行します。`artifacts` にインストーラーが作成されます。`CaptureZoo.exe --self-test` で合成画像による編集の基本テストを実行できます。実際の画面取得・クリップボード書き込み・ショートカット登録はこのテストに含みません。
-
-## ライセンス
-
-GNUの自由ソフトウェアの理念に共感し、ソースを公開しています。CaptureZooは[MITライセンス](LICENSE)です。依存ライブラリは[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)を参照してください。
+.NET 8 SDK and Inno Setup 6: `scripts/build.ps1`.
+[MIT License](LICENSE) · [Third-party notices](THIRD-PARTY-NOTICES.md)
