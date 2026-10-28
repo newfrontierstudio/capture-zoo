@@ -11,6 +11,27 @@ internal static class UiLanguage
  internal static string Selection=>selected??Read();
  internal static void Set(string value){if(value is not("auto" or "en" or "ja"))throw new ArgumentException("Unknown language");Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);File.WriteAllText(SettingsPath+".tmp",value);File.Move(SettingsPath+".tmp",SettingsPath,true);selected=value;}
  static readonly Dictionary<string,string> Strings=new(){
+        ["キャプチャのショートカット"]="Capture shortcut",
+        ["OCRのショートカット"]="OCR shortcut",
+        ["文字を読み取る ({0})"]="Recognise text ({0})",
+        ["文字を読み取る（F10）"]="Recognise text (F10)",
+        ["F10を登録できません。ほかのアプリの割り当てを確認してください。"]="Could not register F10. Check the shortcut settings in other applications.",
+        ["右ドラッグでOCR"]="Right-drag to recognise text",
+        ["文字を読み取る（OCR）"]="Read text (OCR)",
+        ["読み取り結果（編集できます）"]="Recognised text (editable)",
+        ["日本語・English ／ PC内で読み取ります。初回のみ約26MBをダウンロードします。"]="Japanese / English. Processed on your PC. About 26 MB is downloaded on first use only.",
+        ["テキストをコピー"]="Copy text",
+        ["閉じる"]="Close",
+        ["テキストをコピーしました。"]="Text copied.",
+        ["コピーできませんでした。もう一度お試しください。"]="Could not copy the text. Please try again.",
+        ["OCRの準備中… {0:0.0} / {1:0.0} MB"]="Preparing OCR… {0:0.0} / {1:0.0} MB",
+        ["文字を読み取っています…"]="Recognising text…",
+        ["{0}行を読み取りました。内容を確認・修正してコピーできます。"]="Recognised {0} lines. Check or edit the text before copying.",
+        ["文字が見つかりませんでした。文字の範囲を大きめに選んでお試しください。"]="No text was found. Try selecting a larger area around the text.",
+        ["読み取りできませんでした。接続または画像を確認して、もう一度お試しください。"]="Could not recognise the text. Check your connection or image and try again.",
+        ["画像が大きすぎます。読み取りたい範囲を小さくしてください。"]="This image is too large. Select a smaller text region.",
+        ["OCRモデルの準備が必要です。もう一度実行してください。"]="The OCR models need to be prepared. Please try again.",
+
         ["起動に失敗しました。CaptureZoo.log を送ってください。"]="Could not start CaptureZoo. Please include CaptureZoo.log in your report.",
         ["今すぐキャプチャ ({0})"]="Capture now ({0})",
         ["ショートカットキー"]="Capture shortcut",

@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Contains("--direct-ocr-self-test")){Environment.ExitCode=DirectOcrTests.Run();return;}
+        if(args.Contains("--ocr-self-test")){Environment.ExitCode=OcrTests.Run();return;}
         if(args.Contains("--self-test")){Environment.ExitCode=CaptureSelfTest.Run();return;}
         try
         {

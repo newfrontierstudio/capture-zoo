@@ -79,6 +79,11 @@ internal sealed class EditorForm : Form
     private readonly List<Bitmap> _undoHistory = new();
     private readonly List<Bitmap> _redoHistory = new();
     private bool _cancelled;
+    private readonly ContextMenuStrip _canvasMenu=new();
+    private bool _ocrSelecting;
+    private Point _ocrOrigin,_ocrCurrent;
+    private Rectangle? _ocrSelection;
+    internal Action<Bitmap>? OcrRequestOverride;
 
     public Image? FinalImage { get; private set; }
 
@@ -173,6 +178,8 @@ internal sealed class EditorForm : Form
             brushSizeHost.Controls.Add(button);
         }
         _toolbar.Controls.Add(brushSizeHost);
+        var ocr=new Button{Text="OCR",Width=54,Height=SwatchSize,ForeColor=Color.White,BackColor=Color.FromArgb(70,73,82),FlatStyle=FlatStyle.Flat,Margin=new Padding(12,0,0,0),AccessibleName=UiLanguage.T("文字を読み取る（OCR）")};ocr.Click+=(_,_)=>ReadText();_toolbar.Controls.Add(ocr);
+        _canvasMenu.Items.Add(UiLanguage.T("文字を読み取る（OCR）"),null,(_,_)=>ReadText());_canvas.Disposed+=(_,_)=>_canvasMenu.Dispose();
         HighlightSelectedBrushSize();
 
         _toolbarHost.Controls.Add(_toolbar);
@@ -182,10 +189,11 @@ internal sealed class EditorForm : Form
         _canvas.Image = _image;
         _canvas.MouseDown += CanvasMouseDown;
         _canvas.MouseMove += CanvasMouseMove;
-        _canvas.MouseUp += (sender, e) => { if(e.Button==MouseButtons.Left)CanvasMouseMove(sender,e);EndStroke(); };
+        _canvas.MouseUp += (sender, e) => { if(e.Button==MouseButtons.Right){FinishOcrSelection(e.Location);return;}if(e.Button==MouseButtons.Left)CanvasMouseMove(sender,e);EndStroke(); };
         _canvas.Paint += PaintStrokePreview;
-        _canvas.RenderGpu=()=>_gpuRenderer.Draw(_canvas.Handle,_canvas.ClientSize,_strokeChanged&&_undoHistory.Count>0?_undoHistory[^1]:_image,_gpuImageRevision,_gpuStrokeId,_strokeSegments,_smoothStroke.Preview,_penColor,_penWidth,_canvas.BackColor);
-        _canvas.MouseCaptureChanged += (_, _) => { if (!_canvas.Capture) EndStroke(); };
+        _canvas.Paint += PaintOcrSelection;
+        _canvas.RenderGpu=()=>_gpuRenderer.Draw(_canvas.Handle,_canvas.ClientSize,_strokeChanged&&_undoHistory.Count>0?_undoHistory[^1]:_image,_gpuImageRevision,_gpuStrokeId,_strokeSegments,_smoothStroke.Preview,_penColor,_penWidth,_canvas.BackColor,_ocrSelection);
+        _canvas.MouseCaptureChanged += (_, _) => { if (!_canvas.Capture){CancelOcrSelection();EndStroke();} };
         _canvas.CanvasDoubleClick += (_, _) => CopyAndClose();
 
         _toolbarHost.Resize += (_, _) => CenterToolbar();
@@ -193,7 +201,11 @@ internal sealed class EditorForm : Form
         Load += (_, _) => CenterToolbar();
     }
 
-    internal void ApplyLanguage(){UiLanguage.Apply(this);for(int i=0;i<_swatchButtons.Count;i++)_swatchButtons[i].AccessibleName=UiLanguage.F("色 {0}",i+1);for(int i=0;i<_brushSizeButtons.Count;i++)_brushSizeButtons[i].AccessibleName=UiLanguage.F("ブラシサイズ {0}",_preferences.BrushSizes[i]);foreach(Form owned in OwnedForms)UiLanguage.Apply(owned);}
+    internal void ApplyLanguage(){UiLanguage.Apply(this);for(int i=0;i<_swatchButtons.Count;i++)_swatchButtons[i].AccessibleName=UiLanguage.F("色 {0}",i+1);for(int i=0;i<_brushSizeButtons.Count;i++)_brushSizeButtons[i].AccessibleName=UiLanguage.F("ブラシサイズ {0}",_preferences.BrushSizes[i]);foreach(ToolStripItem item in _canvasMenu.Items)UiLanguage.Apply(item);foreach(Form owned in OwnedForms)UiLanguage.Apply(owned);}
+    private void ReadText(Rectangle? bounds=null){EndStroke();using var image=bounds is {} region?_image.Clone(region,System.Drawing.Imaging.PixelFormat.Format32bppArgb):new Bitmap(_image);if(OcrRequestOverride!=null){OcrRequestOverride(image);return;}using var dialog=new OcrDialog(image);dialog.ShowDialog(this);}
+    private void CancelOcrSelection(){if(!_ocrSelecting&&_ocrSelection==null)return;_ocrSelecting=false;_ocrSelection=null;_canvas.Invalidate();}
+    private void FinishOcrSelection(Point end){if(!_ocrSelecting)return;var origin=_ocrOrigin;var region=OcrSelection.Bounds(origin,end,_canvas.ClientSize,_image.Size);bool drag=OcrSelection.Dragged(origin,end);CancelOcrSelection();_canvas.Capture=false;if(drag){if(region is {} rect&&rect.Width>=2&&rect.Height>=2)ReadText(rect);}else _canvasMenu.Show(_canvas,end);}
+    private void PaintOcrSelection(object? sender,PaintEventArgs e){if(_ocrSelection is not {} rect)return;var box=_canvas.ClientRectangle;float scale=Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height);var display=new RectangleF((box.Width-_image.Width*scale)/2+rect.Left*scale,(box.Height-_image.Height*scale)/2+rect.Top*scale,rect.Width*scale,rect.Height*scale);using var fill=new SolidBrush(Color.FromArgb(40,0,160,220));using var pen=new Pen(Color.FromArgb(0,140,210),1);e.Graphics.FillRectangle(fill,display);e.Graphics.DrawRectangle(pen,display.X,display.Y,display.Width,display.Height);}
     private void SelectColor(int index)
     {
         _penColor = Color.FromArgb(_preferences.PaletteColors[index]);
@@ -311,6 +323,8 @@ internal sealed class EditorForm : Form
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
+        if(keyData==Keys.Escape&&_ocrSelecting){CancelOcrSelection();_canvas.Capture=false;return true;}
+        if(keyData==(Keys.Control|Keys.Shift|Keys.O)){CancelOcrSelection();_canvas.Capture=false;ReadText();return true;}
         if (keyData == (Keys.Control | Keys.Z))
         {
             RestoreUndo();
@@ -369,8 +383,9 @@ internal sealed class EditorForm : Form
 
     private void CanvasMouseDown(object? sender, MouseEventArgs e)
     {
+        if(e.Button==MouseButtons.Right){EndStroke();_ocrOrigin=_ocrCurrent=e.Location;_ocrSelecting=true;_ocrSelection=null;_canvas.Capture=true;return;}
         if (e.Button != MouseButtons.Left) return;
-        EndStroke();
+        CancelOcrSelection();EndStroke();
         _last = ImagePoint(e.Location);
         var box=_canvas.ClientRectangle;float scale=Math.Max(.0001f,Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height));
         _smoothStroke.ApproximationTolerance=2.25f/scale;
@@ -380,6 +395,7 @@ internal sealed class EditorForm : Form
 
     private void CanvasMouseMove(object? sender, MouseEventArgs e)
     {
+        if(_ocrSelecting){_ocrCurrent=e.Location;_ocrSelection=OcrSelection.Bounds(_ocrOrigin,_ocrCurrent,_canvas.ClientSize,_image.Size);_canvas.Invalidate();return;}
         if (_last is null || e.Button != MouseButtons.Left) return;
         var next = ImagePoint(e.Location);
         if(next==_last.Value)return;

@@ -21,7 +21,7 @@ internal sealed class GpuCanvasRenderer:IDisposable
  readonly List<ID2D1PathGeometry> batches=[];
  IntPtr window;Size size;long revision=-1;int stroke=-1;bool failed;
  internal bool HardwareActive{get;private set;}
- internal bool Draw(IntPtr hwnd,Size client,Bitmap source,long imageRevision,int strokeId,IReadOnlyList<SmoothStroke.Segment> segments,SmoothStroke.Segment? tail,Color color,float width,Color background)
+ internal bool Draw(IntPtr hwnd,Size client,Bitmap source,long imageRevision,int strokeId,IReadOnlyList<SmoothStroke.Segment> segments,SmoothStroke.Segment? tail,Color color,float width,Color background,Rectangle? selection=null)
  {
   if(failed||client.Width<=0||client.Height<=0)return false;
   try{
@@ -32,7 +32,8 @@ internal sealed class GpuCanvasRenderer:IDisposable
    while((batches.Count+1)*BatchSize<=segments.Count)batches.Add(Geometry(segments,batches.Count*BatchSize,BatchSize,null)!);
    using var changing=Geometry(segments,batches.Count*BatchSize,segments.Count-batches.Count*BatchSize,tail);
    target.BeginDraw();target.Transform=Matrix3x2.Identity;target.Clear(ToColor(background));float scale=Math.Min((float)client.Width/source.Width,(float)client.Height/source.Height);target.Transform=Matrix3x2.CreateScale(scale)*Matrix3x2.CreateTranslation((client.Width-source.Width*scale)/2,(client.Height-source.Height*scale)/2);target.AntialiasMode=AntialiasMode.PerPrimitive;
-   target.PushAxisAlignedClip(new Vortice.RawRectF(0,0,source.Width,source.Height),AntialiasMode.Aliased);target.DrawBitmap(bitmap!,1,BitmapInterpolationMode.Linear);brush!.Color=ToColor(color);foreach(var geometry in batches)target.DrawGeometry(geometry,brush,width,style!);if(changing!=null)target.DrawGeometry(changing,brush,width,style!);target.PopAxisAlignedClip();target.EndDraw().CheckError();HardwareActive=true;return true;
+   target.PushAxisAlignedClip(new Vortice.RawRectF(0,0,source.Width,source.Height),AntialiasMode.Aliased);target.DrawBitmap(bitmap!,1,BitmapInterpolationMode.Linear);brush!.Color=ToColor(color);foreach(var geometry in batches)target.DrawGeometry(geometry,brush,width,style!);if(changing!=null)target.DrawGeometry(changing,brush,width,style!);if(selection is {} rect){var bounds=new Vortice.RawRectF(rect.Left,rect.Top,rect.Right,rect.Bottom);brush.Color=ToColor(Color.FromArgb(40,0,160,220));target.FillRectangle(bounds,brush);brush.Color=ToColor(Color.FromArgb(0,140,210));target.DrawRectangle(bounds,brush,1/Math.Max(.0001f,scale));}
+   target.PopAxisAlignedClip();target.EndDraw().CheckError();HardwareActive=true;return true;
   }catch(Exception error){AppLog.Error(error);Release();failed=true;HardwareActive=false;AppLog.Info("Pen preview: CPU fallback (hardware renderer unavailable).");return false;}
  }
  ID2D1PathGeometry? Geometry(IReadOnlyList<SmoothStroke.Segment> segments,int offset,int count,SmoothStroke.Segment? tail)
