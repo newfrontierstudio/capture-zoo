@@ -2,6 +2,7 @@ using System.Reflection;
 namespace CaptureZoo;
 internal static class CaptureImprovementTests
 {
+ static IEnumerable<Control> Desc(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Desc(c)));
  private const BindingFlags Private=BindingFlags.Instance|BindingFlags.NonPublic;
  internal static void Run(Bitmap source,string root)
  {
@@ -44,7 +45,17 @@ internal static class CaptureImprovementTests
    second.Close();editor.Close();
    if(updates!=5)throw new Exception("Closing an editor overwrote the shared clipboard");
   }
-  var history=new List<Bitmap>();try{var push=typeof(EditorForm).GetMethod("PushHistory",BindingFlags.Static|BindingFlags.NonPublic)!;for(int i=0;i<24;i++)push.Invoke(null,[history,new Bitmap(32,32)]);if(history.Count!=20)throw new Exception("Original 20-step history limit changed");}finally{foreach(var bitmap in history)bitmap.Dispose();}
-  File.WriteAllText(Path.Combine(root,"improvement-results.txt"),"PASS release-to-copy exactly once; no copy on close, even unfinished stroke; simultaneous independent editors; undo/redo clipboard refresh; initial copy before Shown with fake clipboard; cancellation; fractional zoom coordinates; antialiased pen pixels; stroke context reuse; undo/redo; live HSV picker preview and Cancel restoration; original 20-step history retained; no full-image history copy for a click without drawing. No desktop capture or real clipboard changes.");
+  var history=new List<Bitmap>();try{var push=typeof(EditorForm).GetMethod("PushHistory",BindingFlags.Static|BindingFlags.NonPublic)!;for(int i=0;i<24;i++)push.Invoke(null,[history,new Bitmap(32,32)]);if(history.Count!=10)throw new Exception("History must be capped at ten steps");}finally{foreach(var bitmap in history)bitmap.Dispose();}
+  using(var editor=new EditorForm(source,_=>{})){
+   var undo=(List<Bitmap>)typeof(EditorForm).GetField("_undoHistory",Private)!.GetValue(editor)!;var redo=(List<Bitmap>)typeof(EditorForm).GetField("_redoHistory",Private)!.GetValue(editor)!;
+   undo.Add(new Bitmap(source));redo.Add(new Bitmap(source));editor.Show();Application.DoEvents();editor.ClientSize=new Size(220,160);Application.DoEvents();
+   var button=Desc(editor).OfType<Button>().Single(b=>b.Text=="OCR");
+   using(var preview=new Bitmap(editor.Width,editor.Height)){editor.DrawToBitmap(preview,new Rectangle(Point.Empty,preview.Size));preview.Save(Path.Combine(root,"ocr-narrow.png"));}
+   if(!button.Visible||button.Parent==null||button.Left<0||button.Right>button.Parent.ClientSize.Width||button.Parent.Right>editor.ClientSize.Width)throw new Exception($"OCR button is clipped in narrow editor: visible={button.Visible}, parent={button.Parent?.Name}/{button.Parent?.Bounds}, button={button.Bounds}, editor={editor.ClientSize}");
+   if(TextRenderer.MeasureText(button.Text,button.Font).Width>button.Width-button.Padding.Horizontal-8)throw new Exception("OCR label lacks room");
+   editor.Close();if(undo.Count!=0||redo.Count!=0)throw new Exception("Closing editor retained undo/redo images");
+  }
+  using(var reopened=new EditorForm(source,_=>{})){foreach(string field in new[]{"_undoHistory","_redoHistory"})if(((List<Bitmap>)typeof(EditorForm).GetField(field,Private)!.GetValue(reopened)!).Count!=0)throw new Exception("New editor restored old history");}
+  File.WriteAllText(Path.Combine(root,"improvement-results.txt"),"PASS release-to-copy exactly once; no copy on close, even unfinished stroke; simultaneous independent editors; undo/redo clipboard refresh; initial copy before Shown with fake clipboard; cancellation; fractional zoom coordinates; antialiased pen pixels; stroke context reuse; undo/redo; live HSV picker preview and Cancel restoration; maximum ten-step history; histories cleared on editor close and never restored; no full-image history copy for a click without drawing. No desktop capture or real clipboard changes.");
  }
 }

@@ -53,7 +53,7 @@ internal sealed class EditorForm : Form
     }
 
     private const int SwatchSize = 30;
-    private const int HistoryLimit = 20;
+    private const int HistoryLimit = 10;
 
     // 表示倍率を保ち、キャプチャ画像を歪めない。
     private readonly CaptureCanvas _canvas = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom };
@@ -62,6 +62,8 @@ internal sealed class EditorForm : Form
     private readonly List<Button> _swatchButtons = new();
     private readonly List<Button> _brushSizeButtons = new();
     private readonly Panel _toolbarHost;
+    private readonly Panel _toolbarViewport;
+    private readonly Panel _ocrHost;
     private readonly FlowLayoutPanel _toolbar;
     private Color _penColor;
     private int _penWidth;
@@ -109,6 +111,8 @@ internal sealed class EditorForm : Form
             Height = 52,
             BackColor = Color.FromArgb(40, 42, 49)
         };
+        _toolbarViewport = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        _ocrHost = new Panel { Dock = DockStyle.Right, Width = 80, BackColor = _toolbarHost.BackColor };
         SizeToCapturedImage();
 
         _toolbar = new FlowLayoutPanel
@@ -178,11 +182,14 @@ internal sealed class EditorForm : Form
             brushSizeHost.Controls.Add(button);
         }
         _toolbar.Controls.Add(brushSizeHost);
-        var ocr=new Button{Text="OCR",Width=54,Height=SwatchSize,ForeColor=Color.White,BackColor=Color.FromArgb(70,73,82),FlatStyle=FlatStyle.Flat,Margin=new Padding(12,0,0,0),AccessibleName=UiLanguage.T("文字を読み取る（OCR）")};ocr.Click+=(_,_)=>ReadText();_toolbar.Controls.Add(ocr);
+        var ocr=new Button{Text="OCR",Width=72,Height=SwatchSize,ForeColor=Color.White,BackColor=Color.FromArgb(70,73,82),FlatStyle=FlatStyle.Flat,Padding=new Padding(4,0,4,0),Location=new Point(4,8),AccessibleName=UiLanguage.T("文字を読み取る（OCR）")};ocr.Click+=(_,_)=>ReadText();_ocrHost.Controls.Add(ocr);
         _canvasMenu.Items.Add(UiLanguage.T("文字を読み取る（OCR）"),null,(_,_)=>ReadText());_canvas.Disposed+=(_,_)=>_canvasMenu.Dispose();
         HighlightSelectedBrushSize();
 
-        _toolbarHost.Controls.Add(_toolbar);
+        _toolbarViewport.Controls.Add(_toolbar);
+        _toolbarHost.Controls.Add(_toolbarViewport);
+        _toolbarHost.Controls.Add(_ocrHost);
+        _ocrHost.BringToFront();
 
         Controls.Add(_canvas);
         Controls.Add(_toolbarHost);
@@ -284,8 +291,8 @@ internal sealed class EditorForm : Form
     private void CenterToolbar()
     {
         _toolbar.Location = new Point(
-            Math.Max(0, (_toolbarHost.Width - _toolbar.Width) / 2),
-            Math.Max(0, (_toolbarHost.Height - _toolbar.Height) / 2));
+            Math.Max(0, (_toolbarViewport.Width - _toolbar.Width) / 2),
+            Math.Max(0, (_toolbarViewport.Height - _toolbar.Height) / 2));
     }
 
     protected override void WndProc(ref Message m)
@@ -374,6 +381,12 @@ internal sealed class EditorForm : Form
         // Closing must not replace another editor's clipboard image.
         FinishStroke(false);
         base.OnFormClosing(e);
+    }
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        ClearHistory(_undoHistory);
+        ClearHistory(_redoHistory);
+        base.OnFormClosed(e);
     }
     private void CopyAndClose()
     {

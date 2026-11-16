@@ -1,4 +1,4 @@
-# CaptureZoo 1.0.13
+# CaptureZoo 1.0.14
 
 SNS投稿や、LINE・メールでの画像共有に。画面を切り取り、ペンで丸や矢印、メモを書き込めるスクリーンショットアプリです。画像は編集画面を開いた時と、ペンを離した時に自動でクリップボードへ入ります。
 
@@ -10,9 +10,9 @@ SNS投稿や、LINE・メールでの画像共有に。画面を切り取り、�
 
 OCRは日本語・英語に対応。初回のみ認識モデル約26MBをダウンロードし、その後はPC内で処理します。画像は外部へ送信しません。
 
-ペンのプレビューと拡大縮小はDirect2DでGPU描画し、非対応環境ではCPU方式に切り替えます。曲線補間、複数の編集画面、元に戻す・やり直し、色とブラシサイズの変更に対応。表示言語は日本語／Englishから選べます。
+ペンのプレビューと拡大縮小はDirect2DでGPU描画し、非対応環境ではCPU方式に切り替えます。曲線補間、複数の編集画面、元に戻す・やり直し、色とブラシサイズの変更に対応。「元に戻す」は最大10回分で、編集画面を閉じると履歴を消去します。表示言語は日本語／Englishから選べます。
 
-[最新版をダウンロード](https://github.com/newfrontierstudio/capture-zoo/releases/tag/v1.0.13)
+[最新版をダウンロード](https://github.com/newfrontierstudio/capture-zoo/releases/tag/v1.0.14)
 
 ## English
 
@@ -22,7 +22,7 @@ Capture and annotate screenshots for social posts, LINE and email. Images are co
 - **F10: OCR** — select text with a left-drag to recognise it and copy it automatically. Press Esc to cancel selection.
 - Right-click the tray icon to change **Capture shortcut** and **OCR shortcut** separately (F1–F12). Settings persist across restarts and duplicate assignments are prevented. Ordinary right-drag gestures remain available.
 
-Japanese and English OCR runs locally. About 26 MB of recognition models is downloaded on first use; images are not uploaded. GPU-accelerated pen previews and scaling use Direct2D with a CPU fallback. Multiple editors, undo/redo and Japanese/English interfaces are supported.
+Japanese and English OCR runs locally. About 26 MB of recognition models is downloaded on first use; images are not uploaded. GPU-accelerated pen previews and scaling use Direct2D with a CPU fallback. Multiple editors, undo/redo (up to 10 steps; cleared when an editor closes) and Japanese/English interfaces are supported.
 
 Windows 10/11 x64. The installer downloads the Microsoft .NET 8 Desktop Runtime only if needed. Updating preserves settings.
 
