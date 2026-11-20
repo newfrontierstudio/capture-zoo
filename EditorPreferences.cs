@@ -23,6 +23,9 @@ internal sealed class EditorPreferences
     public int SelectedPaletteIndex { get; set; }
 
     public int SelectedBrushSizeIndex { get; set; } = 1;
+    public bool OutlineEnabled { get; set; }
+    public int OutlinePaletteIndex { get; set; } = 1;
+    public int OutlineHalfPixels { get; set; } = 4;
 
     public static EditorPreferences Load()
     {
@@ -67,5 +70,7 @@ internal sealed class EditorPreferences
     private bool IsValid() => PaletteColors.Count == PaletteCount && BrushSizes.Count == BrushCount
         && BrushSizes.All(size => size is >= 1 and <= 100)
         && SelectedPaletteIndex is >= 0 and < PaletteCount
-        && SelectedBrushSizeIndex is >= 0 and < BrushCount;
+        && SelectedBrushSizeIndex is >= 0 and < BrushCount
+        && OutlinePaletteIndex is >= 0 and < PaletteCount
+        && OutlineHalfPixels is >= 1 and <= 24;
 }

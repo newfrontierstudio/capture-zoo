@@ -7,6 +7,28 @@ namespace CaptureZoo;
 
 internal sealed class EditorForm : Form
 {
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int valueSize);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // COLORREF uses BGR; #272A2E becomes 0x002E2A27.
+        const int captionColor = 0x002E2A27;
+        const int textColor = 0x00FFFFFF;
+        int darkMode = 1;
+        try
+        {
+            DwmSetWindowAttribute(Handle, 20, ref darkMode, sizeof(int));
+            int caption = captionColor;
+            int text = textColor;
+            DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int));
+            DwmSetWindowAttribute(Handle, 36, ref text, sizeof(int));
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
     {
@@ -29,6 +51,29 @@ internal sealed class EditorForm : Form
             if (isDoubleClick)
                 OptionDoubleClick?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private sealed class OutlineWidthSlider : Control
+    {
+        private int value;
+        private bool dragging;
+        internal event EventHandler? ValueChanged;
+        internal OutlineWidthSlider(int initial){value=Math.Clamp(initial,1,24);Size=new Size(106,30);TabStop=true;SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
+        internal int Value=>value;
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Color.FromArgb(39,42,46));e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+            using var track=new Pen(Color.FromArgb(76,82,88),6){StartCap=LineCap.Round,EndCap=LineCap.Round};e.Graphics.DrawLine(track,9,15,Width-10,15);
+            int x=9+(int)Math.Round((Width-19)*(value-1)/23d);using var active=new Pen(Color.FromArgb(84,216,255),6){StartCap=LineCap.Round,EndCap=LineCap.Round};e.Graphics.DrawLine(active,9,15,x,15);
+            using var knob=new SolidBrush(Color.FromArgb(220,224,227));e.Graphics.FillEllipse(knob,x-6,9,12,12);
+            if(dragging)TextRenderer.DrawText(e.Graphics,$"{value/2f:0.0} px",Font,new Rectangle(0,0,Width,17),Color.FromArgb(220,224,227),TextFormatFlags.HorizontalCenter|TextFormatFlags.NoPadding);
+        }
+        private void SetFromX(int x){int next=Math.Clamp((int)Math.Round((x-9)*23d/Math.Max(1,Width-19))+1,1,24);if(next==value)return;value=next;Invalidate();ValueChanged?.Invoke(this,EventArgs.Empty);}
+        protected override void OnMouseDown(MouseEventArgs e){base.OnMouseDown(e);if(e.Button!=MouseButtons.Left)return;Focus();dragging=true;Capture=true;SetFromX(e.X);Invalidate();}
+        protected override void OnMouseMove(MouseEventArgs e){base.OnMouseMove(e);if(dragging)SetFromX(e.X);}
+        protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);dragging=false;Capture=false;Invalidate();}
+        protected override bool IsInputKey(Keys keyData)=>keyData is Keys.Left or Keys.Right||base.IsInputKey(keyData);
+        protected override void OnKeyDown(KeyEventArgs e){base.OnKeyDown(e);int next=value+(e.KeyCode==Keys.Right?1:e.KeyCode==Keys.Left?-1:0);if(next==value)return;value=Math.Clamp(next,1,24);Invalidate();ValueChanged?.Invoke(this,EventArgs.Empty);e.Handled=true;}
     }
 
     // PictureBox の DoubleClick は環境差があるため、Windows メッセージで確実に拾う。
@@ -67,6 +112,11 @@ internal sealed class EditorForm : Form
     private readonly FlowLayoutPanel _toolbar;
     private Color _penColor;
     private int _penWidth;
+    private Button? _outlineToggle;
+    private Button? _outlineColorButton;
+    private readonly System.Windows.Forms.Timer _outlineSaveTimer=new(){Interval=300};
+    private bool _choosingOutlineColor;
+    private Bitmap? _pendingStrokeSnapshot;
     private PointF? _last;
     private readonly SmoothStroke _smoothStroke=new();
     private readonly GpuCanvasRenderer _gpuRenderer=new();
@@ -109,9 +159,9 @@ internal sealed class EditorForm : Form
         {
             Dock = DockStyle.Top,
             Height = 52,
-            BackColor = Color.FromArgb(40, 42, 49)
+            BackColor = Color.FromArgb(39, 42, 46)
         };
-        _toolbarViewport = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        _toolbarViewport = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, AutoScroll = true };
         _ocrHost = new Panel { Dock = DockStyle.Right, Width = 80, BackColor = _toolbarHost.BackColor };
         SizeToCapturedImage();
 
@@ -140,7 +190,8 @@ internal sealed class EditorForm : Form
             };
             swatch.FlatAppearance.BorderColor = Color.White;
             swatch.FlatAppearance.BorderSize = 0;
-            swatch.Click += (_, _) => SelectColor(currentIndex);
+            swatch.Paint+=(_,args)=>{if(currentIndex!=_preferences.OutlinePaletteIndex)return;using var outer=new Pen(OutlineColor,3);using var inner=new Pen(Color.White,1);args.Graphics.DrawRectangle(outer,1,1,swatch.Width-3,swatch.Height-3);args.Graphics.DrawRectangle(inner,4,4,swatch.Width-9,swatch.Height-9);};
+            swatch.Click += (_, _) => {if(_choosingOutlineColor){_preferences.OutlinePaletteIndex=currentIndex;_choosingOutlineColor=false;UpdateOutlineControls();_preferences.Save();}else SelectColor(currentIndex);};
             swatch.OptionDoubleClick += (_, _) => EditColor(currentIndex);
             _swatchButtons.Add(swatch);
             _toolbar.Controls.Add(swatch);
@@ -182,8 +233,19 @@ internal sealed class EditorForm : Form
             brushSizeHost.Controls.Add(button);
         }
         _toolbar.Controls.Add(brushSizeHost);
+        var outlineHost=new FlowLayoutPanel{AutoSize=true,WrapContents=false,Margin=new Padding(10,0,0,0)};
+        _outlineToggle=new Button{Width=36,Height=SwatchSize,BackColor=Color.FromArgb(39,42,46),FlatStyle=FlatStyle.Flat,TabStop=false,AccessibleName="Outline off"};
+        _outlineToggle.Paint+=(_,args)=>{args.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using var edge=new Pen(OutlineColor,3);args.Graphics.DrawEllipse(edge,6,3,23,23);if(!_preferences.OutlineEnabled){using var slash=new Pen(Color.FromArgb(220,224,227),2);args.Graphics.DrawLine(slash,5,26,30,3);}};
+        _outlineToggle.Click+=(_,_)=>{_preferences.OutlineEnabled=!_preferences.OutlineEnabled;UpdateOutlineControls();_preferences.Save();};
+        _outlineColorButton=new Button{Width=32,Height=SwatchSize,BackColor=Color.FromArgb(39,42,46),FlatStyle=FlatStyle.Flat,TabStop=false,AccessibleName="Pick outline color from palette"};
+        _outlineColorButton.Paint+=(_,args)=>{args.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using var fill=new SolidBrush(OutlineColor);args.Graphics.FillEllipse(fill,4,3,23,23);using var edge=new Pen(_choosingOutlineColor?Color.White:Color.FromArgb(76,82,88),_choosingOutlineColor?2:1);args.Graphics.DrawEllipse(edge,4,3,23,23);};
+        _outlineColorButton.Click+=(_,_)=>{_choosingOutlineColor=true;UpdateOutlineControls();};
+        var outlineWidth=new OutlineWidthSlider(_preferences.OutlineHalfPixels){AccessibleName="Outline width"};
+        outlineWidth.ValueChanged+=(_,_)=>{_preferences.OutlineHalfPixels=outlineWidth.Value;_outlineSaveTimer.Stop();_outlineSaveTimer.Start();};
+        _outlineSaveTimer.Tick+=(_,_)=>{_outlineSaveTimer.Stop();_preferences.Save();};
+        outlineHost.Controls.AddRange([_outlineToggle,_outlineColorButton,outlineWidth]);_toolbar.Controls.Add(outlineHost);UpdateOutlineControls();
         var ocr=new Button{Text="OCR",Width=72,Height=SwatchSize,ForeColor=Color.White,BackColor=Color.FromArgb(70,73,82),FlatStyle=FlatStyle.Flat,Padding=new Padding(4,0,4,0),Location=new Point(4,8),AccessibleName=UiLanguage.T("文字を読み取る（OCR）")};ocr.Click+=(_,_)=>ReadText();_ocrHost.Controls.Add(ocr);
-        _canvasMenu.Items.Add(UiLanguage.T("文字を読み取る（OCR）"),null,(_,_)=>ReadText());_canvas.Disposed+=(_,_)=>_canvasMenu.Dispose();
+        _canvasMenu.Items.Add("OCR",null,(_,_)=>ReadText());_canvas.Disposed+=(_,_)=>_canvasMenu.Dispose();
         HighlightSelectedBrushSize();
 
         _toolbarViewport.Controls.Add(_toolbar);
@@ -199,13 +261,15 @@ internal sealed class EditorForm : Form
         _canvas.MouseUp += (sender, e) => { if(e.Button==MouseButtons.Right){FinishOcrSelection(e.Location);return;}if(e.Button==MouseButtons.Left)CanvasMouseMove(sender,e);EndStroke(); };
         _canvas.Paint += PaintStrokePreview;
         _canvas.Paint += PaintOcrSelection;
-        _canvas.RenderGpu=()=>_gpuRenderer.Draw(_canvas.Handle,_canvas.ClientSize,_strokeChanged&&_undoHistory.Count>0?_undoHistory[^1]:_image,_gpuImageRevision,_gpuStrokeId,_strokeSegments,_smoothStroke.Preview,_penColor,_penWidth,_canvas.BackColor,_ocrSelection);
+        _canvas.RenderGpu=()=>_gpuRenderer.Draw(_canvas.Handle,_canvas.ClientSize,_strokeChanged&&_undoHistory.Count>0?_undoHistory[^1]:_image,_gpuImageRevision,_gpuStrokeId,_strokeSegments,_smoothStroke.Preview,_penColor,_penWidth,_canvas.BackColor,_ocrSelection,_preferences.OutlineEnabled,OutlineColor,OutlineWidth);
         _canvas.MouseCaptureChanged += (_, _) => { if (!_canvas.Capture){CancelOcrSelection();EndStroke();} };
         _canvas.CanvasDoubleClick += (_, _) => CopyAndClose();
 
         _toolbarHost.Resize += (_, _) => CenterToolbar();
+        _toolbarViewport.Resize += (_, _) => CenterToolbar();
         _toolbar.SizeChanged += (_, _) => CenterToolbar();
         Load += (_, _) => CenterToolbar();
+        Shown += (_, _) => BeginInvoke(CenterToolbar);
     }
 
     internal void ApplyLanguage(){UiLanguage.Apply(this);for(int i=0;i<_swatchButtons.Count;i++)_swatchButtons[i].AccessibleName=UiLanguage.F("色 {0}",i+1);for(int i=0;i<_brushSizeButtons.Count;i++)_brushSizeButtons[i].AccessibleName=UiLanguage.F("ブラシサイズ {0}",_preferences.BrushSizes[i]);foreach(ToolStripItem item in _canvasMenu.Items)UiLanguage.Apply(item);foreach(Form owned in OwnedForms)UiLanguage.Apply(owned);}
@@ -265,9 +329,17 @@ internal sealed class EditorForm : Form
     {
         foreach (var swatch in _swatchButtons)
         {
-            var isSelected = swatch.BackColor == _penColor;
+            var isSelected = swatch.BackColor == (_choosingOutlineColor?OutlineColor:_penColor);
             swatch.FlatAppearance.BorderSize = isSelected ? 2 : 0;
         }
+    }
+    private Color OutlineColor=>Color.FromArgb(_preferences.PaletteColors[_preferences.OutlinePaletteIndex]);
+    private float OutlineWidth=>_preferences.OutlineHalfPixels/2f;
+    private void UpdateOutlineControls()
+    {
+        if(_outlineToggle!=null){_outlineToggle.AccessibleName=_preferences.OutlineEnabled?"Outline on":"Outline off";_outlineToggle.Invalidate();}
+        if(_outlineColorButton!=null){_outlineColorButton.AccessibleName=_choosingOutlineColor?"Choose outline color from palette":"Pick outline color from palette";_outlineColorButton.Invalidate();}
+        HighlightSelected();foreach(var swatch in _swatchButtons)swatch.Invalidate();
     }
 
     private void HighlightSelectedBrushSize()
@@ -379,7 +451,7 @@ internal sealed class EditorForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         // Closing must not replace another editor's clipboard image.
-        FinishStroke(false);
+        FinishStroke(false);_outlineSaveTimer.Stop();_preferences.Save();_outlineSaveTimer.Dispose();
         base.OnFormClosing(e);
     }
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -403,6 +475,9 @@ internal sealed class EditorForm : Form
         var box=_canvas.ClientRectangle;float scale=Math.Max(.0001f,Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height));
         _smoothStroke.ApproximationTolerance=2.25f/scale;
         _smoothStroke.Start(_last.Value);_strokeSegments.Clear();_gpuStrokeId++;
+        _pendingStrokeSnapshot=new Bitmap(_image);
+        _strokeGraphics=Graphics.FromImage(_image);_strokeGraphics.SmoothingMode=SmoothingMode.AntiAlias;_strokeGraphics.PixelOffsetMode=PixelOffsetMode.HighQuality;
+        _strokePen=new Pen(_penColor,_penWidth){StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round};
         _canvas.Capture=true;
     }
 
@@ -412,7 +487,7 @@ internal sealed class EditorForm : Form
         if (_last is null || e.Button != MouseButtons.Left) return;
         var next = ImagePoint(e.Location);
         if(next==_last.Value)return;
-        if(_strokeGraphics==null){PushHistory(_undoHistory,new Bitmap(_image));ClearHistory(_redoHistory);_strokeGraphics=Graphics.FromImage(_image);_strokeGraphics.SmoothingMode=SmoothingMode.AntiAlias;_strokeGraphics.PixelOffsetMode=PixelOffsetMode.HighQuality;_strokePen=new Pen(_penColor,_penWidth){StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round};}
+        if(!_strokeChanged&&_pendingStrokeSnapshot!=null){PushHistory(_undoHistory,_pendingStrokeSnapshot);_pendingStrokeSnapshot=null;ClearHistory(_redoHistory);}
         var before=_smoothStroke.Preview;
         var committed=_smoothStroke.Add(next);if(committed.HasValue)_strokeSegments.Add(committed.Value);_last=next;_strokeChanged=true;
         RectangleF dirty=new(next,SizeF.Empty);
@@ -423,7 +498,7 @@ internal sealed class EditorForm : Form
     private void InvalidateStroke(RectangleF dirty)
     {
         var box=_canvas.ClientRectangle;float scale=Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height);
-        dirty.Inflate(_penWidth/2f+3,_penWidth/2f+3);
+        dirty.Inflate(_penWidth/2f+(_preferences.OutlineEnabled?OutlineWidth:0)+3,_penWidth/2f+(_preferences.OutlineEnabled?OutlineWidth:0)+3);
         var bounds=Rectangle.FromLTRB((int)Math.Floor((box.Width-_image.Width*scale)/2+dirty.Left*scale),(int)Math.Floor((box.Height-_image.Height*scale)/2+dirty.Top*scale),(int)Math.Ceiling((box.Width-_image.Width*scale)/2+dirty.Right*scale),(int)Math.Ceiling((box.Height-_image.Height*scale)/2+dirty.Bottom*scale));
         _canvas.Invalidate(Rectangle.Intersect(bounds,box));
     }
@@ -431,7 +506,13 @@ internal sealed class EditorForm : Form
     {
         if(_strokePen==null)return;
         var box=_canvas.ClientRectangle;float scale=Math.Min((float)box.Width/_image.Width,(float)box.Height/_image.Height);var state=e.Graphics.Save();
-        try{e.Graphics.TranslateTransform((box.Width-_image.Width*scale)/2,(box.Height-_image.Height*scale)/2);e.Graphics.ScaleTransform(scale,scale);e.Graphics.SetClip(new Rectangle(0,0,_image.Width,_image.Height),CombineMode.Intersect);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.PixelOffsetMode=PixelOffsetMode.HighQuality;using var path=ActiveStrokePath();if(path.PointCount>0)e.Graphics.DrawPath(_strokePen,path);}finally{e.Graphics.Restore(state);}
+        try{e.Graphics.TranslateTransform((box.Width-_image.Width*scale)/2,(box.Height-_image.Height*scale)/2);e.Graphics.ScaleTransform(scale,scale);e.Graphics.SetClip(new Rectangle(0,0,_image.Width,_image.Height),CombineMode.Intersect);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.PixelOffsetMode=PixelOffsetMode.HighQuality;using var path=ActiveStrokePath();DrawStroke(e.Graphics,path);}finally{e.Graphics.Restore(state);}
+    }
+    private void DrawStroke(Graphics graphics,GraphicsPath path)
+    {
+        if(path.PointCount==0||_strokePen==null)return;
+        if(_preferences.OutlineEnabled){using var edge=new Pen(OutlineColor,_penWidth+2*OutlineWidth){StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round};graphics.DrawPath(edge,path);}
+        graphics.DrawPath(_strokePen,path);
     }
 
     private GraphicsPath ActiveStrokePath()
@@ -442,9 +523,10 @@ internal sealed class EditorForm : Form
     private void FinishStroke(bool copy)
     {
         bool changed=_strokeChanged;
-        if(changed&&_strokeGraphics!=null&&_strokePen!=null){if(_last.HasValue&&_smoothStroke.Add(_last.Value,true) is {} final)_strokeSegments.Add(final);using var path=ActiveStrokePath();if(path.PointCount>0)_strokeGraphics.DrawPath(_strokePen,path);}
+        if(changed&&_strokeGraphics!=null&&_strokePen!=null){if(_last.HasValue&&_smoothStroke.Add(_last.Value,true) is {} final)_strokeSegments.Add(final);using var path=ActiveStrokePath();DrawStroke(_strokeGraphics,path);}
         _smoothStroke.Clear();_strokeSegments.Clear();_strokeChanged=false;_last=null;
         _strokePen?.Dispose();_strokePen=null;_strokeGraphics?.Dispose();_strokeGraphics=null;
+        _pendingStrokeSnapshot?.Dispose();_pendingStrokeSnapshot=null;
         if(changed){_gpuImageRevision++;_canvas.Invalidate();}
         if(_canvas.Capture)_canvas.Capture=false;
         if(changed && copy) CopyCurrentImage();

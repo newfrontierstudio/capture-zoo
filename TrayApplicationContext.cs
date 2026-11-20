@@ -48,10 +48,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         catch (Exception error) { AppLog.Error(error); }
         try{if(File.Exists(OcrKeyPath)&&Enum.TryParse<Keys>(File.ReadAllText(OcrKeyPath).Trim(),out var savedOcr)&&savedOcr>=Keys.F1&&savedOcr<=Keys.F12)ocrKey=savedOcr;}catch(Exception error){AppLog.Error(error);}
         if(_captureKey==ocrKey)_captureKey=ocrKey==Keys.F9?Keys.F10:Keys.F9;
-        _captureItem = new ToolStripMenuItem(UiLanguage.F("今すぐキャプチャ ({0})",_captureKey));
-        _captureItem.Text=UiLanguage.F("今すぐキャプチャ ({0})",_captureKey);
+        _captureItem = new ToolStripMenuItem($"Capture now ({_captureKey})");
         var captureItem = _captureItem;
-        _hotkeyMenu = new ToolStripMenuItem(UiLanguage.T("キャプチャのショートカット"));
+        _hotkeyMenu = new ToolStripMenuItem("Capture shortcut");
         for (var number = 1; number <= 12; number++)
         {
             var key = (Keys)((int)Keys.F1 + number - 1);
@@ -61,24 +60,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         captureItem.Click += (_, _) => RunCaptureFlow();
 
-        _autoStartItem = new ToolStripMenuItem(UiLanguage.T("Windows起動時に自動起動"))
+        _autoStartItem = new ToolStripMenuItem("Start with Windows")
         {
             CheckOnClick = true,
             Checked = IsAutoStartEnabled()
         };
         _autoStartItem.CheckedChanged += (_, _) => SetAutoStart(_autoStartItem.Checked);
 
-        var exitItem = new ToolStripMenuItem(UiLanguage.T("終了"));
+        var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += (_, _) => ExitThread();
 
         menu.Items.Add(captureItem);
         menu.Items.Add(_hotkeyMenu);
-        ocrItem=new ToolStripMenuItem(UiLanguage.F("文字を読み取る ({0})",ocrKey));
-        ocrShortcutMenu=new ToolStripMenuItem(UiLanguage.T("OCRのショートカット"));
+        ocrItem=new ToolStripMenuItem($"OCR ({ocrKey})");
+        ocrShortcutMenu=new ToolStripMenuItem("OCR shortcut");
         for(int number=1;number<=12;number++){var key=(Keys)((int)Keys.F1+number-1);var item=new ToolStripMenuItem(key.ToString()){Tag=key,Checked=key==ocrKey,Enabled=key!=_captureKey};item.Click+=(_,_)=>ChangeOcrKey(key);ocrShortcutMenu.DropDownItems.Add(item);}
         menu.Items.Add(ocrShortcutMenu);
         ocrItem.Click+=(_,_)=>RunOcrFlow();menu.Items.Add(ocrItem);
-        menu.Items.Add(UiLanguage.T("キャプチャを中止して待機に戻る"), null, (_, _) => CancelCapture());
+        menu.Items.Add("Cancel capture", null, (_, _) => CancelCapture());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -92,9 +91,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ContextMenuStrip = menu
         };
         _trayIcon.DoubleClick += (_, _) => RunCaptureFlow();
-        var languageMenu=new ToolStripMenuItem("Language / 言語");menu.Items.Insert(menu.Items.Count-1,languageMenu);
-        foreach(var value in new[]{"auto","ja","en"}){string choice=value;var item=new ToolStripMenuItem(choice=="ja"?"日本語":choice=="en"?"English":UiLanguage.T("自動（Windows）")){Tag=choice,Checked=UiLanguage.Selection==choice};languageMenu.DropDownItems.Add(item);
-            item.Click+=(_,_)=>{try{UiLanguage.Set(choice);foreach(ToolStripItem entry in menu.Items)UiLanguage.Apply(entry);_captureItem.Text=UiLanguage.F("今すぐキャプチャ ({0})",_captureKey);ocrItem.Text=UiLanguage.F("文字を読み取る ({0})",ocrKey);_trayIcon.Text=UiLanguage.F("CaptureZoo ({0}でキャプチャ)",_captureKey);foreach(ToolStripMenuItem option in languageMenu.DropDownItems)option.Checked=(string)option.Tag! == choice;foreach(var editor in _editors)editor.ApplyLanguage();}catch(Exception error){MessageBox.Show(error.Message,"CaptureZoo");}};
+        var languageMenu=new ToolStripMenuItem("Language");menu.Items.Insert(menu.Items.Count-1,languageMenu);
+        foreach(var value in new[]{"auto","ja","en"}){string choice=value;var item=new ToolStripMenuItem(choice=="ja"?"Japanese":choice=="en"?"English":"Auto (Windows)"){Tag=choice,Checked=UiLanguage.Selection==choice};languageMenu.DropDownItems.Add(item);
+            item.Click+=(_,_)=>{try{UiLanguage.Set(choice);foreach(ToolStripMenuItem option in languageMenu.DropDownItems)option.Checked=(string)option.Tag! == choice;foreach(var editor in _editors)editor.ApplyLanguage();}catch(Exception error){MessageBox.Show(error.Message,"CaptureZoo");}};
         }
 
 
@@ -140,7 +139,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
         _captureKey = key;
-        _captureItem.Text = UiLanguage.F("今すぐキャプチャ ({0})",key);
+        _captureItem.Text = $"Capture now ({key})";
         _trayIcon.Text = UiLanguage.F("CaptureZoo ({0}でキャプチャ)",key);
         foreach (ToolStripMenuItem item in _hotkeyMenu.DropDownItems) item.Checked = (Keys)item.Tag! == key;
         RefreshShortcutMenus();
@@ -151,7 +150,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         foreach(ToolStripMenuItem item in _hotkeyMenu.DropDownItems){item.Checked=(Keys)item.Tag! == _captureKey;item.Enabled=(Keys)item.Tag! != ocrKey;}
         foreach(ToolStripMenuItem item in ocrShortcutMenu.DropDownItems){item.Checked=(Keys)item.Tag! == ocrKey;item.Enabled=(Keys)item.Tag! != _captureKey;}
-        ocrItem.Text=UiLanguage.F("文字を読み取る ({0})",ocrKey);
+        ocrItem.Text=$"OCR ({ocrKey})";
     }
     private void ChangeOcrKey(Keys key)
     {

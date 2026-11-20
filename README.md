@@ -1,4 +1,4 @@
-# CaptureZoo 1.0.14
+# CaptureZoo 1.0.19
 
 SNS投稿や、LINE・メールでの画像共有に。画面を切り取り、ペンで丸や矢印、メモを書き込めるスクリーンショットアプリです。画像は編集画面を開いた時と、ペンを離した時に自動でクリップボードへ入ります。
 
@@ -10,9 +10,9 @@ SNS投稿や、LINE・メールでの画像共有に。画面を切り取り、�
 
 OCRは日本語・英語に対応。初回のみ認識モデル約26MBをダウンロードし、その後はPC内で処理します。画像は外部へ送信しません。
 
-ペンのプレビューと拡大縮小はDirect2DでGPU描画し、非対応環境ではCPU方式に切り替えます。曲線補間、複数の編集画面、元に戻す・やり直し、色とブラシサイズの変更に対応。「元に戻す」は最大10回分で、編集画面を閉じると履歴を消去します。表示言語は日本語／Englishから選べます。
+ペンのプレビューと拡大縮小はDirect2DでGPU描画し、非対応環境ではCPU方式に切り替えます。曲線補間、複数の編集画面、元に戻す・やり直し、色とブラシサイズの変更に対応。線の外側に縁を付けられ、縁は初期OFF、幅は0.5px刻みで調整でき、色は既存のパレットから選べます。1.0.16では縁の操作を文字なしのアイコンと色のプレビューに整理し、幅の操作中はpx値を表示します。スライダー操作時の設定保存をまとめて初回の引っ掛かりを抑えました。「元に戻す」は最大10回分で、編集画面を閉じると履歴を消去します。表示言語は日本語／Englishから選べます。
 
-[最新版をダウンロード](https://github.com/newfrontierstudio/capture-zoo/releases/tag/v1.0.14)
+[公開版 1.0.14 をダウンロード](https://github.com/newfrontierstudio/capture-zoo/releases/tag/v1.0.14)
 
 ## English
 
@@ -28,5 +28,5 @@ Windows 10/11 x64. The installer downloads the Microsoft .NET 8 Desktop Runtime 
 
 ## Build / License
 
-.NET 8 SDK and Inno Setup 6: `scripts/build.ps1`.
+.NET 8 SDK and Inno Setup 6 or 7: `scripts/build.ps1`.
 [MIT License](LICENSE) · [Third-party notices](THIRD-PARTY-NOTICES.md)

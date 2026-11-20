@@ -7,7 +7,7 @@ Copy-Item (Join-Path $root 'README.md') $app
 Copy-Item (Join-Path $root 'LICENSE') $app
 Copy-Item (Join-Path $root 'THIRD-PARTY-NOTICES.md') $app
 Copy-Item (Join-Path $root 'licenses') $app -Recurse -Force
-$compiler = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+$compiler = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (!$compiler) { throw 'Install Inno Setup 6 first' }
 & $compiler (Join-Path $root 'installer/CaptureZoo.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
